@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, password, companyName, cnpj, headquartersAddress, branchAddresses, managerName, managerPosition } = await req.json();
+    const { email, password, companyName, cnpj, headquartersAddress, branchAddresses, managerName, managerPosition, logoUrl } = await req.json();
 
     if (!email || !password || !companyName || !cnpj || !managerName || !managerPosition) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios não preenchidos" }), {
@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
         branch_addresses: branchAddresses || [],
         manager_name: managerName,
         manager_position: managerPosition,
+        logo_url: logoUrl || null,
       })
       .select()
       .single();
@@ -50,7 +51,6 @@ Deno.serve(async (req) => {
     });
 
     if (authError) {
-      // Rollback company
       await supabaseAdmin.from("companies").delete().eq("id", company.id);
       return new Response(JSON.stringify({ error: authError.message }), {
         status: 400,

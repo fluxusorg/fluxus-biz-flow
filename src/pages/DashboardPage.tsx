@@ -105,7 +105,7 @@ const RecentRecords = () => {
     const fetch = async () => {
       const { data } = await supabase
         .from("material_records")
-        .select("*, profiles!material_records_user_id_fkey(full_name)")
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(5);
       setRecords(data || []);

@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft, Plus, X, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import logoIcon from "@/assets/logo-icon.png";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -24,6 +25,8 @@ const RegisterPage = () => {
   });
   const [branches, setBranches] = useState<string[]>([]);
   const [newBranch, setNewBranch] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const updateForm = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -38,6 +41,14 @@ const RegisterPage = () => {
 
   const removeBranch = (index: number) => {
     setBranches((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLogoFile(file);
+      setLogoPreview(URL.createObjectURL(file));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,6 +66,19 @@ const RegisterPage = () => {
 
     setLoading(true);
 
+    let logoUrl: string | null = null;
+
+    // Upload logo if provided
+    if (logoFile) {
+      const ext = logoFile.name.split(".").pop();
+      const path = `company-logos/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("uploads").upload(path, logoFile);
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(path);
+        logoUrl = urlData.publicUrl;
+      }
+    }
+
     const { data, error } = await supabase.functions.invoke("register-company", {
       body: {
         email: form.email,
@@ -65,6 +89,7 @@ const RegisterPage = () => {
         branchAddresses: branches,
         managerName: form.managerName,
         managerPosition: form.managerPosition,
+        logoUrl,
       },
     });
 
@@ -76,28 +101,44 @@ const RegisterPage = () => {
     }
 
     toast.success("Empresa cadastrada com sucesso! Faça login.");
-    navigate("/login");
+    navigate("/auth");
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         <div className="mb-6">
-          <Link to="/login" className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm">
+          <Link to="/auth" className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm">
             <ArrowLeft className="w-4 h-4" /> Voltar ao login
           </Link>
         </div>
 
         <Card className="border-0 shadow-xl">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 rounded-xl gradient-primary flex items-center justify-center mb-3">
-              <Building2 className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <img src={logoIcon} alt="Fluxus" className="h-12 w-12 mx-auto mb-3 object-contain" />
             <h2 className="text-2xl font-bold font-display">Cadastro da Empresa</h2>
             <p className="text-muted-foreground text-sm">Crie a conta master da sua empresa no Fluxus</p>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Logo upload */}
+              <div className="space-y-2">
+                <Label>Logo da Empresa</Label>
+                <div className="flex items-center gap-4">
+                  <label className="cursor-pointer">
+                    <div className="w-20 h-20 rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden hover:border-primary transition-colors">
+                      {logoPreview ? (
+                        <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Camera className="w-6 h-6 text-muted-foreground" />
+                      )}
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                  </label>
+                  <p className="text-xs text-muted-foreground">Clique para enviar a logo da empresa (opcional)</p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nome da Empresa *</Label>

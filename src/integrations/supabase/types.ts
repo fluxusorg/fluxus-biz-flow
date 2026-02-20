@@ -163,6 +163,7 @@ export type Database = {
           id: string
           quantity: number
           record_id: string
+          stock_product_id: string | null
           unit: string
         }
         Insert: {
@@ -171,6 +172,7 @@ export type Database = {
           id?: string
           quantity?: number
           record_id: string
+          stock_product_id?: string | null
           unit: string
         }
         Update: {
@@ -179,6 +181,7 @@ export type Database = {
           id?: string
           quantity?: number
           record_id?: string
+          stock_product_id?: string | null
           unit?: string
         }
         Relationships: [
@@ -187,6 +190,57 @@ export type Database = {
             columns: ["record_id"]
             isOneToOne: false
             referencedRelation: "material_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "record_cargos_stock_product_id_fkey"
+            columns: ["stock_product_id"]
+            isOneToOne: false
+            referencedRelation: "stock_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_products: {
+        Row: {
+          company_id: string
+          created_at: string
+          current_quantity: number
+          description: string | null
+          id: string
+          minimum_quantity: number | null
+          name: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          current_quantity?: number
+          description?: string | null
+          id?: string
+          minimum_quantity?: number | null
+          name: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          current_quantity?: number
+          description?: string | null
+          id?: string
+          minimum_quantity?: number | null
+          name?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
