@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -11,6 +12,7 @@ import EmployeesPage from "./pages/EmployeesPage";
 import RecordsPage from "./pages/RecordsPage";
 import NewRecordPage from "./pages/NewRecordPage";
 import CompanyPage from "./pages/CompanyPage";
+import StockPage from "./pages/StockPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,7 +31,7 @@ const ProtectedRoute = ({ children, masterOnly = false }: { children: React.Reac
     );
   }
 
-  if (!user || !profile) return <Navigate to="/login" replace />;
+  if (!user || !profile) return <Navigate to="/auth" replace />;
   if (masterOnly && profile.role !== "master") return <Navigate to="/dashboard" replace />;
 
   return <>{children}</>;
@@ -59,14 +61,16 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/auth" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute masterOnly><EmployeesPage /></ProtectedRoute>} />
             <Route path="/records" element={<ProtectedRoute><RecordsPage /></ProtectedRoute>} />
             <Route path="/new-record" element={<ProtectedRoute><NewRecordPage /></ProtectedRoute>} />
             <Route path="/company" element={<ProtectedRoute masterOnly><CompanyPage /></ProtectedRoute>} />
+            <Route path="/stock" element={<ProtectedRoute masterOnly><StockPage /></ProtectedRoute>} />
+            <Route path="/login" element={<Navigate to="/auth" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

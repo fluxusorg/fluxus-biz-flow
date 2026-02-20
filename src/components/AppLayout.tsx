@@ -1,9 +1,9 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard } from "lucide-react";
+import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard, Package, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import { useState } from "react";
+import logoIcon from "@/assets/logo-icon.png";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -13,6 +13,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const { profile, company, signOut } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const isMaster = profile?.role === "master";
 
   const navItems = isMaster
@@ -20,6 +21,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         { label: "Painel", icon: LayoutDashboard, path: "/dashboard" },
         { label: "Funcionários", icon: Users, path: "/employees" },
         { label: "Registros", icon: FileText, path: "/records" },
+        { label: "Estoque", icon: Package, path: "/stock" },
         { label: "Empresa", icon: Building2, path: "/company" },
       ]
     : [
@@ -30,40 +32,69 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   return (
     <div className="min-h-screen flex bg-background">
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-64 gradient-hero text-primary-foreground">
-        <div className="p-6 border-b border-white/10">
-          <h1 className="text-2xl font-bold font-display tracking-tight">Fluxus</h1>
-          <p className="text-xs opacity-70 mt-1">{company?.name || "Carregando..."}</p>
+      <aside className={`hidden md:flex flex-col gradient-hero text-primary-foreground transition-all duration-300 ${collapsed ? "w-16" : "w-64"}`}>
+        <div className={`p-4 border-b border-white/10 flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+          <img src={logoIcon} alt="Fluxus" className="h-8 w-8 object-contain shrink-0" />
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-bold font-display tracking-tight truncate">Fluxus</h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {company?.logo_url && (
+                  <img src={company.logo_url} alt="" className="h-4 w-4 rounded object-cover" />
+                )}
+                <p className="text-xs opacity-70 truncate">{company?.name || "Carregando..."}</p>
+              </div>
+            </div>
+          )}
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+
+        <nav className={`flex-1 ${collapsed ? "px-1" : "px-3"} py-3 space-y-1`}>
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              title={collapsed ? item.label : undefined}
+              className={`flex items-center gap-3 ${collapsed ? "justify-center px-2" : "px-4"} py-3 rounded-lg text-sm font-medium transition-colors ${
                 location.pathname === item.path
                   ? "bg-white/15 text-white"
                   : "text-white/70 hover:bg-white/10 hover:text-white"
               }`}
             >
-              <item.icon className="w-5 h-5" />
-              {item.label}
+              <item.icon className="w-5 h-5 shrink-0" />
+              {!collapsed && item.label}
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full gradient-accent flex items-center justify-center text-sm font-bold">
-              {profile?.full_name?.charAt(0) || "?"}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{profile?.full_name}</p>
-              <p className="text-xs opacity-60 capitalize">{profile?.role === "master" ? "Gerenciador" : "Funcionário"}</p>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10" onClick={signOut}>
-            <LogOut className="w-4 h-4 mr-2" /> Sair
-          </Button>
+
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="mx-auto mb-2 p-1.5 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
+
+        <div className={`${collapsed ? "px-1" : "px-4"} pb-4 border-t border-white/10 pt-3`}>
+          {!collapsed ? (
+            <>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full gradient-accent flex items-center justify-center text-sm font-bold shrink-0">
+                  {profile?.full_name?.charAt(0) || "?"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{profile?.full_name}</p>
+                  <p className="text-xs opacity-60 capitalize">{profile?.role === "master" ? "Gerenciador" : "Funcionário"}</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10" onClick={signOut}>
+                <LogOut className="w-4 h-4 mr-2" /> Sair
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" size="icon" className="w-full text-white/70 hover:text-white hover:bg-white/10" onClick={signOut} title="Sair">
+              <LogOut className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </aside>
 
@@ -73,7 +104,10 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <button onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
-          <h1 className="text-lg font-bold font-display text-primary">Fluxus</h1>
+          <div className="flex items-center gap-2">
+            <img src={logoIcon} alt="Fluxus" className="h-6 w-6 object-contain" />
+            <h1 className="text-lg font-bold font-display text-primary">Fluxus</h1>
+          </div>
           <Button variant="ghost" size="icon" onClick={signOut}>
             <LogOut className="w-5 h-5" />
           </Button>

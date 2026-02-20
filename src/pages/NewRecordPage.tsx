@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,13 +9,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, X, MapPin, Camera } from "lucide-react";
+import { ArrowLeft, Plus, X, MapPin, Camera, Image } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
 interface Cargo {
   description: string;
   quantity: number;
+  unit: string;
+  stock_product_id: string | null;
+}
+
+interface StockProduct {
+  id: string;
+  name: string;
   unit: string;
 }
 
@@ -32,20 +39,48 @@ const NewRecordPage = () => {
     vehiclePlate: "",
     notes: "",
   });
-  const [cargos, setCargos] = useState<Cargo[]>([{ description: "", quantity: 1, unit: "kg" }]);
+  const [cargos, setCargos] = useState<Cargo[]>([{ description: "", quantity: 1, unit: "kg", stock_product_id: null }]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [stockProducts, setStockProducts] = useState<StockProduct[]>([]);
 
-  const addCargo = () => setCargos([...cargos, { description: "", quantity: 1, unit: "kg" }]);
+  useEffect(() => {
+    const fetchStock = async () => {
+      const { data } = await supabase.from("stock_products").select("id, name, unit").order("name");
+      setStockProducts((data as StockProduct[]) || []);
+    };
+    fetchStock();
+  }, []);
+
+  const addCargo = () => setCargos([...cargos, { description: "", quantity: 1, unit: "kg", stock_product_id: null }]);
 
   const removeCargo = (i: number) => {
     if (cargos.length > 1) setCargos(cargos.filter((_, idx) => idx !== i));
   };
 
-  const updateCargo = (i: number, key: keyof Cargo, value: string | number) => {
+  const updateCargo = (i: number, key: keyof Cargo, value: string | number | null) => {
     const updated = [...cargos];
     (updated[i] as any)[key] = value;
     setCargos(updated);
+  };
+
+  const selectStockProduct = (i: number, productId: string) => {
+    const product = stockProducts.find((p) => p.id === productId);
+    if (product) {
+      const updated = [...cargos];
+      updated[i] = { ...updated[i], description: product.name, unit: product.unit, stock_product_id: product.id };
+      setCargos(updated);
+    }
+  };
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoFile(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
   };
 
   const getLocation = () => {
@@ -66,22 +101,25 @@ const NewRecordPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!operationType) {
-      toast.error("Selecione o tipo de operação");
-      return;
-    }
-
-    if (!form.vehiclePlate.trim()) {
-      toast.error("Preencha a placa do veículo");
-      return;
-    }
-
-    if (cargos.some((c) => !c.description.trim())) {
-      toast.error("Preencha a descrição de todas as cargas");
-      return;
-    }
+    if (!operationType) { toast.error("Selecione o tipo de operação"); return; }
+    if (!form.vehiclePlate.trim()) { toast.error("Preencha a placa do veículo"); return; }
+    if (cargos.some((c) => !c.description.trim())) { toast.error("Preencha a descrição de todas as cargas"); return; }
+    if (!photoFile) { toast.error("A foto da carga é obrigatória"); return; }
 
     setLoading(true);
+
+    // Upload photo
+    let photoUrl: string | null = null;
+    const ext = photoFile.name.split(".").pop();
+    const path = `${user!.id}/records/${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("uploads").upload(path, photoFile);
+    if (uploadError) {
+      toast.error("Erro ao enviar foto: " + uploadError.message);
+      setLoading(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(path);
+    photoUrl = urlData.publicUrl;
 
     const { data: record, error: recordError } = await supabase
       .from("material_records")
@@ -97,6 +135,7 @@ const NewRecordPage = () => {
         notes: form.notes || null,
         latitude: location?.lat || null,
         longitude: location?.lng || null,
+        photo_url: photoUrl,
       })
       .select()
       .single();
@@ -107,7 +146,6 @@ const NewRecordPage = () => {
       return;
     }
 
-    // Insert cargos
     const { error: cargoError } = await supabase
       .from("record_cargos")
       .insert(
@@ -116,6 +154,7 @@ const NewRecordPage = () => {
           description: c.description,
           quantity: c.quantity,
           unit: c.unit,
+          stock_product_id: c.stock_product_id || null,
         }))
       );
 
@@ -176,12 +215,7 @@ const NewRecordPage = () => {
               {/* Date */}
               <div className="space-y-2">
                 <Label>Data e Hora *</Label>
-                <Input
-                  type="datetime-local"
-                  value={form.recordDate}
-                  onChange={(e) => setForm({ ...form, recordDate: e.target.value })}
-                  required
-                />
+                <Input type="datetime-local" value={form.recordDate} onChange={(e) => setForm({ ...form, recordDate: e.target.value })} required />
               </div>
 
               {/* Vehicle */}
@@ -207,6 +241,28 @@ const NewRecordPage = () => {
                 </div>
               </div>
 
+              {/* Photo - MANDATORY */}
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Foto da Carga *</Label>
+                <label className="cursor-pointer block">
+                  <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${photoPreview ? "border-success" : "border-border hover:border-primary"}`}>
+                    {photoPreview ? (
+                      <div className="space-y-2">
+                        <img src={photoPreview} alt="Preview" className="max-h-48 mx-auto rounded-lg object-cover" />
+                        <p className="text-sm text-success font-medium">Foto selecionada ✓</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Camera className="w-10 h-10 mx-auto text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">Clique para tirar ou selecionar uma foto</p>
+                        <p className="text-xs text-destructive">Obrigatório</p>
+                      </div>
+                    )}
+                  </div>
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
+                </label>
+              </div>
+
               {/* Cargos */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -225,6 +281,22 @@ const NewRecordPage = () => {
                         </button>
                       )}
                     </div>
+
+                    {/* Optional stock product selection */}
+                    {stockProducts.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-sm text-muted-foreground">Selecionar do Estoque (opcional)</Label>
+                        <Select value={cargo.stock_product_id || ""} onValueChange={(v) => selectStockProduct(i, v)}>
+                          <SelectTrigger><SelectValue placeholder="Escolher produto do estoque..." /></SelectTrigger>
+                          <SelectContent>
+                            {stockProducts.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>{p.name} ({p.unit})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <Label className="text-sm">Descrição *</Label>
                       <Input value={cargo.description} onChange={(e) => updateCargo(i, "description", e.target.value)} placeholder="Areia lavada, cimento, etc." />
