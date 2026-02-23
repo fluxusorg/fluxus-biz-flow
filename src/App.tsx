@@ -13,6 +13,9 @@ import RecordsPage from "./pages/RecordsPage";
 import NewRecordPage from "./pages/NewRecordPage";
 import CompanyPage from "./pages/CompanyPage";
 import StockPage from "./pages/StockPage";
+import VehiclesPage from "./pages/VehiclesPage";
+import SuppliersPage from "./pages/SuppliersPage";
+import ProfilePage from "./pages/ProfilePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -70,6 +73,9 @@ const App = () => (
             <Route path="/new-record" element={<ProtectedRoute><NewRecordPage /></ProtectedRoute>} />
             <Route path="/company" element={<ProtectedRoute masterOnly><CompanyPage /></ProtectedRoute>} />
             <Route path="/stock" element={<ProtectedRoute masterOnly><StockPage /></ProtectedRoute>} />
+            <Route path="/vehicles" element={<ProtectedRoute masterOnly><VehiclesPage /></ProtectedRoute>} />
+            <Route path="/suppliers" element={<ProtectedRoute masterOnly><SuppliersPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/login" element={<Navigate to="/auth" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

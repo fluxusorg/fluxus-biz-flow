@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, X, MapPin, Camera, Image } from "lucide-react";
+import { ArrowLeft, Plus, X, MapPin, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
@@ -20,45 +20,54 @@ interface Cargo {
   stock_product_id: string | null;
 }
 
-interface StockProduct {
-  id: string;
-  name: string;
-  unit: string;
-}
+interface StockProduct { id: string; name: string; unit: string; }
+interface Vehicle { id: string; plate: string; brand: string | null; model: string | null; color: string | null; }
+interface Supplier { id: string; name: string; type: string; }
+
+// Get current datetime in Brasília timezone (UTC-3)
+const getBrasiliaDatetime = () => {
+  const now = new Date();
+  const brasiliaOffset = -3 * 60;
+  const localOffset = now.getTimezoneOffset();
+  const diff = brasiliaOffset - (-localOffset);
+  const brasilia = new Date(now.getTime() + diff * 60000);
+  return brasilia.toISOString().slice(0, 16);
+};
 
 const NewRecordPage = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [operationType, setOperationType] = useState<string>("");
-  const [form, setForm] = useState({
-    recordDate: new Date().toISOString().slice(0, 16),
-    vehicleBrand: "",
-    vehicleModel: "",
-    vehicleColor: "",
-    vehiclePlate: "",
-    notes: "",
-  });
+  const [form, setForm] = useState({ recordDate: getBrasiliaDatetime(), notes: "" });
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [originDestType, setOriginDestType] = useState<string>("");
+  const [originDestSupplierId, setOriginDestSupplierId] = useState<string>("");
   const [cargos, setCargos] = useState<Cargo[]>([{ description: "", quantity: 1, unit: "kg", stock_product_id: null }]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [stockProducts, setStockProducts] = useState<StockProduct[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
   useEffect(() => {
-    const fetchStock = async () => {
-      const { data } = await supabase.from("stock_products").select("id, name, unit").order("name");
-      setStockProducts((data as StockProduct[]) || []);
+    const fetchData = async () => {
+      const [stockRes, vehicleRes, supplierRes] = await Promise.all([
+        supabase.from("stock_products").select("id, name, unit").order("name"),
+        supabase.from("vehicles").select("*").order("plate"),
+        supabase.from("suppliers").select("*").order("name"),
+      ]);
+      setStockProducts((stockRes.data as StockProduct[]) || []);
+      setVehicles((vehicleRes.data as Vehicle[]) || []);
+      setSuppliers((supplierRes.data as Supplier[]) || []);
     };
-    fetchStock();
+    fetchData();
   }, []);
 
   const addCargo = () => setCargos([...cargos, { description: "", quantity: 1, unit: "kg", stock_product_id: null }]);
-
-  const removeCargo = (i: number) => {
-    if (cargos.length > 1) setCargos(cargos.filter((_, idx) => idx !== i));
-  };
+  const removeCargo = (i: number) => { if (cargos.length > 1) setCargos(cargos.filter((_, idx) => idx !== i)); };
 
   const updateCargo = (i: number, key: keyof Cargo, value: string | number | null) => {
     const updated = [...cargos];
@@ -77,49 +86,45 @@ const NewRecordPage = () => {
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
-    }
+    if (file) { setPhotoFile(file); setPhotoPreview(URL.createObjectURL(file)); }
   };
 
   const getLocation = () => {
     setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGettingLocation(false);
-        toast.success("Localização obtida!");
-      },
-      () => {
-        toast.error("Não foi possível obter a localização");
-        setGettingLocation(false);
-      }
+      (pos) => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGettingLocation(false); toast.success("Localização obtida!"); },
+      () => { toast.error("Não foi possível obter a localização"); setGettingLocation(false); }
     );
   };
 
+  const filteredSuppliers = suppliers.filter((s) => s.type === originDestType);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!operationType) { toast.error("Selecione o tipo de operação"); return; }
-    if (!form.vehiclePlate.trim()) { toast.error("Preencha a placa do veículo"); return; }
+    if (!selectedVehicleId) { toast.error("Selecione um veículo"); return; }
+    if (!originDestType || !originDestSupplierId) {
+      toast.error(operationType === "entry" ? "Informe a origem da mercadoria" : "Informe o destino da mercadoria");
+      return;
+    }
     if (cargos.some((c) => !c.description.trim())) { toast.error("Preencha a descrição de todas as cargas"); return; }
     if (!photoFile) { toast.error("A foto da carga é obrigatória"); return; }
 
     setLoading(true);
 
     // Upload photo
-    let photoUrl: string | null = null;
     const ext = photoFile.name.split(".").pop();
     const path = `${user!.id}/records/${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage.from("uploads").upload(path, photoFile);
-    if (uploadError) {
-      toast.error("Erro ao enviar foto: " + uploadError.message);
-      setLoading(false);
-      return;
-    }
+    if (uploadError) { toast.error("Erro ao enviar foto: " + uploadError.message); setLoading(false); return; }
     const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(path);
-    photoUrl = urlData.publicUrl;
+    const photoUrl = urlData.publicUrl;
+
+    const vehicle = vehicles.find((v) => v.id === selectedVehicleId);
+
+    // Convert Brasília datetime to UTC for storage
+    const brasiliaDate = new Date(form.recordDate + ":00");
+    brasiliaDate.setHours(brasiliaDate.getHours() + 3); // Add 3h to get UTC
 
     const { data: record, error: recordError } = await supabase
       .from("material_records")
@@ -127,11 +132,16 @@ const NewRecordPage = () => {
         user_id: user!.id,
         company_id: profile!.company_id,
         operation_type: operationType,
-        record_date: new Date(form.recordDate).toISOString(),
-        vehicle_brand: form.vehicleBrand || null,
-        vehicle_model: form.vehicleModel || null,
-        vehicle_color: form.vehicleColor || null,
-        vehicle_plate: form.vehiclePlate,
+        record_date: brasiliaDate.toISOString(),
+        vehicle_plate: vehicle?.plate || "",
+        vehicle_brand: vehicle?.brand || null,
+        vehicle_model: vehicle?.model || null,
+        vehicle_color: vehicle?.color || null,
+        vehicle_id: selectedVehicleId,
+        origin_type: operationType === "entry" ? originDestType : null,
+        origin_supplier_id: operationType === "entry" ? originDestSupplierId : null,
+        destination_type: operationType === "exit" ? originDestType : null,
+        destination_supplier_id: operationType === "exit" ? originDestSupplierId : null,
         notes: form.notes || null,
         latitude: location?.lat || null,
         longitude: location?.lng || null,
@@ -140,31 +150,18 @@ const NewRecordPage = () => {
       .select()
       .single();
 
-    if (recordError) {
-      toast.error("Erro ao criar registro: " + recordError.message);
-      setLoading(false);
-      return;
-    }
+    if (recordError) { toast.error("Erro ao criar registro: " + recordError.message); setLoading(false); return; }
 
     const { error: cargoError } = await supabase
       .from("record_cargos")
-      .insert(
-        cargos.map((c) => ({
-          record_id: record.id,
-          description: c.description,
-          quantity: c.quantity,
-          unit: c.unit,
-          stock_product_id: c.stock_product_id || null,
-        }))
-      );
+      .insert(cargos.map((c) => ({
+        record_id: record.id, description: c.description, quantity: c.quantity, unit: c.unit,
+        stock_product_id: c.stock_product_id || null,
+      })));
 
     setLoading(false);
-
-    if (cargoError) {
-      toast.error("Registro criado mas erro nas cargas: " + cargoError.message);
-    } else {
-      toast.success("Registro criado com sucesso!");
-    }
+    if (cargoError) toast.error("Registro criado mas erro nas cargas: " + cargoError.message);
+    else toast.success("Registro criado com sucesso!");
     navigate("/records");
   };
 
@@ -185,60 +182,75 @@ const NewRecordPage = () => {
               <div className="space-y-2">
                 <Label>Tipo de Operação *</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setOperationType("entry")}
-                    className={`p-4 rounded-lg border-2 text-center transition-all ${
-                      operationType === "entry"
-                        ? "border-success bg-success/10 text-success"
-                        : "border-border hover:border-muted-foreground"
-                    }`}
-                  >
+                  <button type="button" onClick={() => { setOperationType("entry"); setOriginDestType(""); setOriginDestSupplierId(""); }}
+                    className={`p-4 rounded-lg border-2 text-center transition-all ${operationType === "entry" ? "border-success bg-success/10 text-success" : "border-border hover:border-muted-foreground"}`}>
                     <div className="text-lg font-semibold">↓ Entrada</div>
                     <div className="text-xs opacity-75">Material chegando</div>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setOperationType("exit")}
-                    className={`p-4 rounded-lg border-2 text-center transition-all ${
-                      operationType === "exit"
-                        ? "border-warning bg-warning/10 text-warning"
-                        : "border-border hover:border-muted-foreground"
-                    }`}
-                  >
+                  <button type="button" onClick={() => { setOperationType("exit"); setOriginDestType(""); setOriginDestSupplierId(""); }}
+                    className={`p-4 rounded-lg border-2 text-center transition-all ${operationType === "exit" ? "border-warning bg-warning/10 text-warning" : "border-border hover:border-muted-foreground"}`}>
                     <div className="text-lg font-semibold">↑ Saída</div>
                     <div className="text-xs opacity-75">Material saindo</div>
                   </button>
                 </div>
               </div>
 
-              {/* Date */}
+              {/* Origin / Destination */}
+              {operationType && (
+                <div className="space-y-3 p-4 rounded-lg bg-muted/50 border">
+                  <Label className="text-base font-semibold">
+                    {operationType === "entry" ? "De onde está chegando? *" : "Para onde está indo? *"}
+                  </Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={() => { setOriginDestType("external"); setOriginDestSupplierId(""); }}
+                      className={`p-3 rounded-lg border-2 text-center transition-all text-sm ${originDestType === "external" ? "border-accent bg-accent/10 text-accent" : "border-border hover:border-muted-foreground"}`}>
+                      Externo
+                    </button>
+                    <button type="button" onClick={() => { setOriginDestType("internal"); setOriginDestSupplierId(""); }}
+                      className={`p-3 rounded-lg border-2 text-center transition-all text-sm ${originDestType === "internal" ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-muted-foreground"}`}>
+                      Interno
+                    </button>
+                  </div>
+                  {originDestType && (
+                    <Select value={originDestSupplierId} onValueChange={setOriginDestSupplierId}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o local..." /></SelectTrigger>
+                      <SelectContent>
+                        {filteredSuppliers.length === 0 ? (
+                          <SelectItem value="_none" disabled>Nenhum local cadastrado</SelectItem>
+                        ) : (
+                          filteredSuppliers.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+
+              {/* Date (Brasília) */}
               <div className="space-y-2">
-                <Label>Data e Hora *</Label>
+                <Label>Data e Hora (Horário de Brasília) *</Label>
                 <Input type="datetime-local" value={form.recordDate} onChange={(e) => setForm({ ...form, recordDate: e.target.value })} required />
               </div>
 
-              {/* Vehicle */}
+              {/* Vehicle Selection */}
               <div className="space-y-2">
-                <Label className="text-base font-semibold">Dados do Transporte</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-sm">Placa *</Label>
-                    <Input value={form.vehiclePlate} onChange={(e) => setForm({ ...form, vehiclePlate: e.target.value.toUpperCase() })} required placeholder="ABC-1234" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Marca</Label>
-                    <Input value={form.vehicleBrand} onChange={(e) => setForm({ ...form, vehicleBrand: e.target.value })} placeholder="Mercedes-Benz" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Modelo</Label>
-                    <Input value={form.vehicleModel} onChange={(e) => setForm({ ...form, vehicleModel: e.target.value })} placeholder="Atego 2426" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Cor</Label>
-                    <Input value={form.vehicleColor} onChange={(e) => setForm({ ...form, vehicleColor: e.target.value })} placeholder="Branco" />
-                  </div>
-                </div>
+                <Label className="text-base font-semibold">Veículo *</Label>
+                {vehicles.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum veículo cadastrado pelo gerenciador.</p>
+                ) : (
+                  <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o veículo..." /></SelectTrigger>
+                    <SelectContent>
+                      {vehicles.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.plate} — {[v.brand, v.model, v.color].filter(Boolean).join(" ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Photo - MANDATORY */}
@@ -282,7 +294,7 @@ const NewRecordPage = () => {
                       )}
                     </div>
 
-                    {/* Optional stock product selection */}
+                    {/* Stock product selection */}
                     {stockProducts.length > 0 && (
                       <div className="space-y-2">
                         <Label className="text-sm text-muted-foreground">Selecionar do Estoque (opcional)</Label>
@@ -299,7 +311,7 @@ const NewRecordPage = () => {
 
                     <div className="space-y-2">
                       <Label className="text-sm">Descrição *</Label>
-                      <Input value={cargo.description} onChange={(e) => updateCargo(i, "description", e.target.value)} placeholder="Areia lavada, cimento, etc." />
+                      <Input value={cargo.description} onChange={(e) => updateCargo(i, "description", e.target.value)} placeholder="Areia lavada, cimento, etc." readOnly={!!cargo.stock_product_id} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
@@ -308,7 +320,7 @@ const NewRecordPage = () => {
                       </div>
                       <div className="space-y-2">
                         <Label className="text-sm">Unidade *</Label>
-                        <Select value={cargo.unit} onValueChange={(v) => updateCargo(i, "unit", v)}>
+                        <Select value={cargo.unit} onValueChange={(v) => updateCargo(i, "unit", v)} disabled={!!cargo.stock_product_id}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="kg">Kg</SelectItem>

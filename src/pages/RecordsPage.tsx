@@ -14,18 +14,32 @@ const RecordsPage = () => {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+  const [suppliers, setSuppliers] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const fetchRecords = async () => {
-      const { data } = await supabase
-        .from("material_records")
-        .select("*, record_cargos(*)")
-        .order("created_at", { ascending: false });
-      setRecords(data || []);
+    const fetchData = async () => {
+      const [recordsRes, suppliersRes] = await Promise.all([
+        supabase.from("material_records").select("*, record_cargos(*)").order("created_at", { ascending: false }),
+        supabase.from("suppliers").select("id, name"),
+      ]);
+      setRecords(recordsRes.data || []);
+      const map: Record<string, string> = {};
+      (suppliersRes.data || []).forEach((s: any) => { map[s.id] = s.name; });
+      setSuppliers(map);
       setLoading(false);
     };
-    fetchRecords();
+    fetchData();
   }, []);
+
+  const getOriginDest = (r: any) => {
+    if (r.operation_type === "entry" && r.origin_supplier_id) {
+      return `Origem: ${r.origin_type === "external" ? "Externo" : "Interno"} — ${suppliers[r.origin_supplier_id] || ""}`;
+    }
+    if (r.operation_type === "exit" && r.destination_supplier_id) {
+      return `Destino: ${r.destination_type === "external" ? "Externo" : "Interno"} — ${suppliers[r.destination_supplier_id] || ""}`;
+    }
+    return null;
+  };
 
   return (
     <AppLayout>
@@ -54,19 +68,12 @@ const RecordsPage = () => {
         ) : (
           <div className="space-y-3">
             {records.map((r) => (
-              <Card
-                key={r.id}
-                className="border shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => setSelectedRecord(r)}
-              >
+              <Card key={r.id} className="border shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedRecord(r)}>
                 <CardContent className="p-4 md:p-6">
                   <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                      r.operation_type === "entry" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
-                    }`}>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${r.operation_type === "entry" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
                       {r.operation_type === "entry" ? <ArrowDownCircle className="w-6 h-6" /> : <ArrowUpCircle className="w-6 h-6" />}
                     </div>
-
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant={r.operation_type === "entry" ? "default" : "secondary"}>
@@ -79,21 +86,22 @@ const RecordsPage = () => {
                         <span className="text-muted-foreground">Veículo:</span>{" "}
                         {[r.vehicle_brand, r.vehicle_model, r.vehicle_color].filter(Boolean).join(" • ") || "N/A"}
                       </p>
+                      {getOriginDest(r) && (
+                        <p className="text-sm text-muted-foreground">{getOriginDest(r)}</p>
+                      )}
                       {r.record_cargos && r.record_cargos.length > 0 && (
                         <p className="text-sm text-muted-foreground">
-                          {r.record_cargos.length} carga(s):{" "}
-                          {r.record_cargos.map((c: any) => `${c.description} (${c.quantity} ${c.unit})`).join(", ")}
+                          {r.record_cargos.length} carga(s): {r.record_cargos.map((c: any) => `${c.description} (${c.quantity} ${c.unit})`).join(", ")}
                         </p>
                       )}
                     </div>
-
                     <div className="text-right shrink-0">
                       <p className="text-sm flex items-center gap-1 text-muted-foreground justify-end">
                         <Calendar className="w-3 h-3" />
-                        {new Date(r.record_date).toLocaleDateString("pt-BR")}
+                        {new Date(r.record_date).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(r.record_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(r.record_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                       </p>
                     </div>
                   </div>
@@ -103,7 +111,6 @@ const RecordsPage = () => {
           </div>
         )}
 
-        {/* Record detail dialog */}
         <Dialog open={!!selectedRecord} onOpenChange={(o) => !o && setSelectedRecord(null)}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -116,7 +123,7 @@ const RecordsPage = () => {
                     {selectedRecord.operation_type === "entry" ? "Entrada" : "Saída"}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
-                    {new Date(selectedRecord.record_date).toLocaleString("pt-BR")}
+                    {new Date(selectedRecord.record_date).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                   </span>
                 </div>
 
@@ -130,6 +137,10 @@ const RecordsPage = () => {
                   <div><span className="text-muted-foreground">Modelo:</span> {selectedRecord.vehicle_model || "N/A"}</div>
                   <div><span className="text-muted-foreground">Cor:</span> {selectedRecord.vehicle_color || "N/A"}</div>
                 </div>
+
+                {getOriginDest(selectedRecord) && (
+                  <p className="text-sm font-medium">{getOriginDest(selectedRecord)}</p>
+                )}
 
                 {selectedRecord.record_cargos?.length > 0 && (
                   <div>

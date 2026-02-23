@@ -8,67 +8,37 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Plus, X, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import logoIcon from "@/assets/logo-icon.png";
+import logoFull from "@/assets/logo-full.png";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    companyName: "",
-    cnpj: "",
-    headquartersAddress: "",
-    managerName: "",
-    managerPosition: "",
+    email: "", password: "", confirmPassword: "",
+    companyName: "", cnpj: "", headquartersAddress: "",
+    managerName: "", managerPosition: "",
   });
   const [branches, setBranches] = useState<string[]>([]);
   const [newBranch, setNewBranch] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  const updateForm = (key: string, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const addBranch = () => {
-    if (newBranch.trim()) {
-      setBranches((prev) => [...prev, newBranch.trim()]);
-      setNewBranch("");
-    }
-  };
-
-  const removeBranch = (index: number) => {
-    setBranches((prev) => prev.filter((_, i) => i !== index));
-  };
+  const updateForm = (key: string, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  const addBranch = () => { if (newBranch.trim()) { setBranches((prev) => [...prev, newBranch.trim()]); setNewBranch(""); } };
+  const removeBranch = (index: number) => setBranches((prev) => prev.filter((_, i) => i !== index));
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setLogoFile(file);
-      setLogoPreview(URL.createObjectURL(file));
-    }
+    if (file) { setLogoFile(file); setLogoPreview(URL.createObjectURL(file)); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (form.password !== form.confirmPassword) {
-      toast.error("As senhas não coincidem");
-      return;
-    }
-
-    if (form.password.length < 6) {
-      toast.error("A senha deve ter no mínimo 6 caracteres");
-      return;
-    }
-
+    if (form.password !== form.confirmPassword) { toast.error("As senhas não coincidem"); return; }
+    if (form.password.length < 6) { toast.error("A senha deve ter no mínimo 6 caracteres"); return; }
     setLoading(true);
 
     let logoUrl: string | null = null;
-
-    // Upload logo if provided
     if (logoFile) {
       const ext = logoFile.name.split(".").pop();
       const path = `company-logos/${Date.now()}.${ext}`;
@@ -81,25 +51,15 @@ const RegisterPage = () => {
 
     const { data, error } = await supabase.functions.invoke("register-company", {
       body: {
-        email: form.email,
-        password: form.password,
-        companyName: form.companyName,
-        cnpj: form.cnpj,
-        headquartersAddress: form.headquartersAddress,
-        branchAddresses: branches,
-        managerName: form.managerName,
-        managerPosition: form.managerPosition,
-        logoUrl,
+        email: form.email, password: form.password,
+        companyName: form.companyName, cnpj: form.cnpj,
+        headquartersAddress: form.headquartersAddress, branchAddresses: branches,
+        managerName: form.managerName, managerPosition: form.managerPosition, logoUrl,
       },
     });
 
     setLoading(false);
-
-    if (error || data?.error) {
-      toast.error(data?.error || error?.message || "Erro ao cadastrar");
-      return;
-    }
-
+    if (error || data?.error) { toast.error(data?.error || error?.message || "Erro ao cadastrar"); return; }
     toast.success("Empresa cadastrada com sucesso! Faça login.");
     navigate("/auth");
   };
@@ -115,7 +75,7 @@ const RegisterPage = () => {
 
         <Card className="border-0 shadow-xl">
           <CardHeader className="text-center">
-            <img src={logoIcon} alt="Fluxus" className="h-12 w-12 mx-auto mb-3 object-contain" />
+            <img src={logoFull} alt="Fluxus" className="h-12 mx-auto mb-3 object-contain" />
             <h2 className="text-2xl font-bold font-display">Cadastro da Empresa</h2>
             <p className="text-muted-foreground text-sm">Crie a conta master da sua empresa no Fluxus</p>
           </CardHeader>
@@ -159,16 +119,12 @@ const RegisterPage = () => {
                 <Label>Filiais</Label>
                 <div className="flex gap-2">
                   <Input value={newBranch} onChange={(e) => setNewBranch(e.target.value)} placeholder="Endereço da filial" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addBranch())} />
-                  <Button type="button" variant="outline" size="icon" onClick={addBranch}>
-                    <Plus className="w-4 h-4" />
-                  </Button>
+                  <Button type="button" variant="outline" size="icon" onClick={addBranch}><Plus className="w-4 h-4" /></Button>
                 </div>
                 {branches.map((b, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm bg-muted px-3 py-2 rounded-md">
                     <span className="flex-1">{b}</span>
-                    <button type="button" onClick={() => removeBranch(i)}>
-                      <X className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                    </button>
+                    <button type="button" onClick={() => removeBranch(i)}><X className="w-4 h-4 text-muted-foreground hover:text-destructive" /></button>
                   </div>
                 ))}
               </div>

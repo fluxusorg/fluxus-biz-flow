@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, User, LogIn, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import logoFull from "@/assets/logo-full.png";
-import logoIcon from "@/assets/logo-icon.png";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const LoginPage = () => {
@@ -40,7 +39,7 @@ const LoginPage = () => {
       >
         <div className="absolute inset-0 bg-primary/60" />
         <div className="relative z-10 text-primary-foreground max-w-lg">
-          <img src={logoFull} alt="Fluxus" className="h-16 object-contain mb-6" />
+          <img src={logoFull} alt="Fluxus" className="h-14 object-contain mb-6" />
           <p className="text-xl opacity-90 leading-relaxed">
             Gestão inteligente de entrada e saída de materiais. 
             Controle total das operações logísticas da sua empresa.
@@ -66,8 +65,7 @@ const LoginPage = () => {
       <div className="flex-1 flex items-center justify-center p-6 bg-background">
         <div className="w-full max-w-md">
           <div className="text-center mb-8 lg:hidden">
-            <img src={logoIcon} alt="Fluxus" className="h-12 w-12 mx-auto mb-2 object-contain" />
-            <h1 className="text-3xl font-bold font-display text-primary">Fluxus</h1>
+            <img src={logoFull} alt="Fluxus" className="h-12 mx-auto mb-2 object-contain" />
             <p className="text-muted-foreground mt-1">Gestão de materiais</p>
           </div>
 
