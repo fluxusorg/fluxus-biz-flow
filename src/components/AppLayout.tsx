@@ -1,8 +1,9 @@
 import { ReactNode, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard, Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard, Package, ChevronLeft, ChevronRight, Truck, MapPin, UserCircle } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import logoFull from "@/assets/logo-full.png";
 import logoIcon from "@/assets/logo-icon.png";
 
 interface AppLayoutProps {
@@ -22,11 +23,15 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         { label: "Funcionários", icon: Users, path: "/employees" },
         { label: "Registros", icon: FileText, path: "/records" },
         { label: "Estoque", icon: Package, path: "/stock" },
+        { label: "Veículos", icon: Truck, path: "/vehicles" },
+        { label: "Fornecedores", icon: MapPin, path: "/suppliers" },
         { label: "Empresa", icon: Building2, path: "/company" },
+        { label: "Meu Perfil", icon: UserCircle, path: "/profile" },
       ]
     : [
         { label: "Painel", icon: LayoutDashboard, path: "/dashboard" },
         { label: "Registros", icon: FileText, path: "/records" },
+        { label: "Meu Perfil", icon: UserCircle, path: "/profile" },
       ];
 
   return (
@@ -34,19 +39,25 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col gradient-hero text-primary-foreground transition-all duration-300 ${collapsed ? "w-16" : "w-64"}`}>
         <div className={`p-4 border-b border-white/10 flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
-          <img src={logoIcon} alt="Fluxus" className="h-8 w-8 object-contain shrink-0" />
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold font-display tracking-tight truncate">Fluxus</h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                {company?.logo_url && (
-                  <img src={company.logo_url} alt="" className="h-4 w-4 rounded object-cover" />
-                )}
-                <p className="text-xs opacity-70 truncate">{company?.name || "Carregando..."}</p>
-              </div>
-            </div>
+          {collapsed ? (
+            <img src={logoIcon} alt="Fluxus" className="h-9 w-9 object-contain shrink-0" />
+          ) : (
+            <img src={logoFull} alt="Fluxus" className="h-10 object-contain" />
           )}
         </div>
+
+        {!collapsed && company && (
+          <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+            {company.logo_url ? (
+              <img src={company.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />
+            ) : (
+              <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                <Building2 className="w-4 h-4" />
+              </div>
+            )}
+            <p className="text-sm opacity-80 truncate">{company.name}</p>
+          </div>
+        )}
 
         <nav className={`flex-1 ${collapsed ? "px-1" : "px-3"} py-3 space-y-1`}>
           {navItems.map((item) => (
@@ -104,10 +115,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <button onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
-          <div className="flex items-center gap-2">
-            <img src={logoIcon} alt="Fluxus" className="h-6 w-6 object-contain" />
-            <h1 className="text-lg font-bold font-display text-primary">Fluxus</h1>
-          </div>
+          <img src={logoFull} alt="Fluxus" className="h-8 object-contain" />
           <Button variant="ghost" size="icon" onClick={signOut}>
             <LogOut className="w-5 h-5" />
           </Button>

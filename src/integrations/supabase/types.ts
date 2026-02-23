@@ -57,48 +57,63 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          destination_supplier_id: string | null
+          destination_type: string | null
           id: string
           latitude: number | null
           longitude: number | null
           notes: string | null
           operation_type: string
+          origin_supplier_id: string | null
+          origin_type: string | null
           photo_url: string | null
           record_date: string
           user_id: string
           vehicle_brand: string | null
           vehicle_color: string | null
+          vehicle_id: string | null
           vehicle_model: string | null
           vehicle_plate: string
         }
         Insert: {
           company_id: string
           created_at?: string
+          destination_supplier_id?: string | null
+          destination_type?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           notes?: string | null
           operation_type: string
+          origin_supplier_id?: string | null
+          origin_type?: string | null
           photo_url?: string | null
           record_date?: string
           user_id: string
           vehicle_brand?: string | null
           vehicle_color?: string | null
+          vehicle_id?: string | null
           vehicle_model?: string | null
           vehicle_plate: string
         }
         Update: {
           company_id?: string
           created_at?: string
+          destination_supplier_id?: string | null
+          destination_type?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           notes?: string | null
           operation_type?: string
+          origin_supplier_id?: string | null
+          origin_type?: string | null
           photo_url?: string | null
           record_date?: string
           user_id?: string
           vehicle_brand?: string | null
           vehicle_color?: string | null
+          vehicle_id?: string | null
           vehicle_model?: string | null
           vehicle_plate?: string
         }
@@ -108,6 +123,72 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_records_destination_supplier_id_fkey"
+            columns: ["destination_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_records_origin_supplier_id_fkey"
+            columns: ["origin_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_records_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_edit_requests: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          profile_id: string
+          requested_changes: Json
+          reviewed_at: string | null
+          status: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          profile_id: string
+          requested_changes: Json
+          reviewed_at?: string | null
+          status?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          profile_id?: string
+          requested_changes?: Json
+          reviewed_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_edit_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_edit_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -238,6 +319,76 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "stock_products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          type: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          type: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicles: {
+        Row: {
+          brand: string | null
+          color: string | null
+          company_id: string
+          created_at: string
+          id: string
+          model: string | null
+          plate: string
+        }
+        Insert: {
+          brand?: string | null
+          color?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          model?: string | null
+          plate: string
+        }
+        Update: {
+          brand?: string | null
+          color?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          model?: string | null
+          plate?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicles_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
