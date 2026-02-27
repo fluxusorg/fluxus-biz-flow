@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, Hash, Pencil, Camera } from "lucide-react";
+import { Building2, Hash, Pencil, Camera, MapPin, User } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -62,14 +62,14 @@ const CompanyPage = () => {
   return (
     <AppLayout>
       <div className="space-y-6 max-w-2xl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold font-display">Dados da Empresa</h1>
-            <p className="text-muted-foreground mt-1">Informações da sua organização</p>
+            <h1 className="text-2xl sm:text-3xl font-bold font-display">Dados da Empresa</h1>
+            <p className="text-muted-foreground mt-1 text-sm">Informações da sua organização</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline"><Pencil className="w-4 h-4 mr-2" /> Editar</Button>
+              <Button variant="outline" size="sm"><Pencil className="w-4 h-4 mr-2" /> Editar</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
@@ -78,11 +78,11 @@ const CompanyPage = () => {
               <form onSubmit={handleSave} className="space-y-4">
                 <div className="flex items-center gap-4">
                   <label className="cursor-pointer">
-                    <div className="w-16 h-16 rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden hover:border-primary transition-colors">
+                    <div className="w-20 h-20 rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden hover:border-primary transition-colors">
                       {logoPreview ? (
                         <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
                       ) : (
-                        <Camera className="w-5 h-5 text-muted-foreground" />
+                        <Camera className="w-6 h-6 text-muted-foreground" />
                       )}
                     </div>
                     <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
@@ -116,13 +116,13 @@ const CompanyPage = () => {
         </div>
 
         <Card className="border shadow-sm">
-          <CardContent className="pt-6 space-y-4">
+          <CardContent className="pt-6 space-y-6">
             <div className="flex items-center gap-4">
               {company.logo_url ? (
-                <img src={company.logo_url} alt="Logo" className="w-16 h-16 rounded-xl object-cover" />
+                <img src={company.logo_url} alt="Logo" className="w-20 h-20 rounded-xl object-cover border" />
               ) : (
-                <div className="w-16 h-16 rounded-xl gradient-primary flex items-center justify-center">
-                  <Building2 className="w-8 h-8 text-primary-foreground" />
+                <div className="w-20 h-20 rounded-xl gradient-primary flex items-center justify-center">
+                  <Building2 className="w-10 h-10 text-primary-foreground" />
                 </div>
               )}
               <div>
@@ -132,6 +132,29 @@ const CompanyPage = () => {
                 </p>
               </div>
             </div>
+
+            {((company as any)?.headquarters_address || (company as any)?.manager_name) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                {(company as any)?.headquarters_address && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Endereço Sede</p>
+                      <p className="text-sm">{(company as any).headquarters_address}</p>
+                    </div>
+                  </div>
+                )}
+                {(company as any)?.manager_name && (
+                  <div className="flex items-start gap-2">
+                    <User className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Gerenciador</p>
+                      <p className="text-sm">{(company as any).manager_name} — {(company as any).manager_position}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
