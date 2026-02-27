@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Plus, X, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import logoFull from "@/assets/logo-full.png";
+import logoIcon from "@/assets/logo-icon.png";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -75,7 +75,10 @@ const RegisterPage = () => {
 
         <Card className="border-0 shadow-xl">
           <CardHeader className="text-center">
-            <img src={logoFull} alt="Fluxus" className="h-12 mx-auto mb-3 object-contain" />
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <img src={logoIcon} alt="Fluxus" className="h-12 w-12 object-contain" />
+              <span className="text-2xl font-bold font-display">Fluxus</span>
+            </div>
             <h2 className="text-2xl font-bold font-display">Cadastro da Empresa</h2>
             <p className="text-muted-foreground text-sm">Crie a conta master da sua empresa no Fluxus</p>
           </CardHeader>

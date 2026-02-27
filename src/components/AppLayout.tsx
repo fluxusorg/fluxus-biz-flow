@@ -3,7 +3,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard, Package, ChevronLeft, ChevronRight, Truck, MapPin, UserCircle } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import logoFull from "@/assets/logo-full.png";
 import logoIcon from "@/assets/logo-icon.png";
 
 interface AppLayoutProps {
@@ -37,29 +36,26 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   return (
     <div className="min-h-screen flex bg-background">
       {/* Sidebar - Desktop */}
-      <aside className={`hidden md:flex flex-col gradient-hero text-primary-foreground transition-all duration-300 ${collapsed ? "w-16" : "w-64"}`}>
+      <aside className={`hidden md:flex flex-col gradient-hero text-primary-foreground transition-all duration-300 ${collapsed ? "w-[72px]" : "w-64"}`}>
         <div className={`p-4 border-b border-white/10 flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
-          {collapsed ? (
-            <img src={logoIcon} alt="Fluxus" className="h-9 w-9 object-contain shrink-0" />
-          ) : (
-            <img src={logoFull} alt="Fluxus" className="h-10 object-contain" />
-          )}
+          <img src={logoIcon} alt="Fluxus" className="h-9 w-9 object-contain shrink-0" />
+          {!collapsed && <span className="text-xl font-bold font-display tracking-tight">Fluxus</span>}
         </div>
 
         {!collapsed && company && (
-          <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+          <div className="px-4 py-3 border-b border-white/10 flex items-center gap-3">
             {company.logo_url ? (
-              <img src={company.logo_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />
+              <img src={company.logo_url} alt="" className="h-9 w-9 rounded-lg object-cover shrink-0" />
             ) : (
-              <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                <Building2 className="w-4 h-4" />
+              <div className="h-9 w-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                <Building2 className="w-5 h-5" />
               </div>
             )}
-            <p className="text-sm opacity-80 truncate">{company.name}</p>
+            <p className="text-sm opacity-80 truncate font-medium">{company.name}</p>
           </div>
         )}
 
-        <nav className={`flex-1 ${collapsed ? "px-1" : "px-3"} py-3 space-y-1`}>
+        <nav className={`flex-1 ${collapsed ? "px-1" : "px-3"} py-3 space-y-1 overflow-y-auto`}>
           {navItems.map((item) => (
             <Link
               key={item.path}
@@ -89,9 +85,13 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           {!collapsed ? (
             <>
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full gradient-accent flex items-center justify-center text-sm font-bold shrink-0">
-                  {profile?.full_name?.charAt(0) || "?"}
-                </div>
+                {profile?.photo_url ? (
+                  <img src={profile.photo_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full gradient-accent flex items-center justify-center text-sm font-bold shrink-0">
+                    {profile?.full_name?.charAt(0) || "?"}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{profile?.full_name}</p>
                   <p className="text-xs opacity-60 capitalize">{profile?.role === "master" ? "Gerenciador" : "Funcionário"}</p>
@@ -110,12 +110,15 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       </aside>
 
       {/* Mobile header */}
-      <div className="flex-1 flex flex-col">
-        <header className="md:hidden flex items-center justify-between p-4 border-b bg-card">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)}>
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card sticky top-0 z-40">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1">
             {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
-          <img src={logoFull} alt="Fluxus" className="h-8 object-contain" />
+          <div className="flex items-center gap-2">
+            <img src={logoIcon} alt="Fluxus" className="h-8 w-8 object-contain" />
+            <span className="text-lg font-bold font-display">Fluxus</span>
+          </div>
           <Button variant="ghost" size="icon" onClick={signOut}>
             <LogOut className="w-5 h-5" />
           </Button>
@@ -123,8 +126,29 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
         {/* Mobile nav overlay */}
         {sidebarOpen && (
-          <div className="md:hidden absolute inset-0 z-50 bg-background/95 backdrop-blur-sm">
-            <div className="p-4 pt-20 space-y-2">
+          <div className="md:hidden fixed inset-0 z-50 bg-background/95 backdrop-blur-sm">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="flex items-center gap-2">
+                <img src={logoIcon} alt="Fluxus" className="h-8 w-8 object-contain" />
+                <span className="text-lg font-bold font-display">Fluxus</span>
+              </div>
+              <button onClick={() => setSidebarOpen(false)} className="p-1">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            {company && (
+              <div className="px-4 py-3 border-b flex items-center gap-3">
+                {company.logo_url ? (
+                  <img src={company.logo_url} alt="" className="h-9 w-9 rounded-lg object-cover shrink-0" />
+                ) : (
+                  <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                    <Building2 className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                )}
+                <p className="text-sm font-medium truncate">{company.name}</p>
+              </div>
+            )}
+            <div className="p-4 space-y-2">
               {navItems.map((item) => (
                 <Link
                   key={item.path}
@@ -140,6 +164,21 @@ const AppLayout = ({ children }: AppLayoutProps) => {
                   {item.label}
                 </Link>
               ))}
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
+              <div className="flex items-center gap-3">
+                {profile?.photo_url ? (
+                  <img src={profile.photo_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full gradient-accent flex items-center justify-center text-sm font-bold shrink-0">
+                    {profile?.full_name?.charAt(0) || "?"}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{profile?.full_name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{profile?.role === "master" ? "Gerenciador" : "Funcionário"}</p>
+                </div>
+              </div>
             </div>
           </div>
         )}

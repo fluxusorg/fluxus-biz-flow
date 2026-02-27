@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,14 +17,13 @@ interface Cargo {
   description: string;
   quantity: number;
   unit: string;
-  stock_product_id: string | null;
+  stock_product_id: string;
 }
 
 interface StockProduct { id: string; name: string; unit: string; }
 interface Vehicle { id: string; plate: string; brand: string | null; model: string | null; color: string | null; }
 interface Supplier { id: string; name: string; type: string; }
 
-// Get current datetime in Brasília timezone (UTC-3)
 const getBrasiliaDatetime = () => {
   const now = new Date();
   const brasiliaOffset = -3 * 60;
@@ -43,7 +42,7 @@ const NewRecordPage = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [originDestType, setOriginDestType] = useState<string>("");
   const [originDestSupplierId, setOriginDestSupplierId] = useState<string>("");
-  const [cargos, setCargos] = useState<Cargo[]>([{ description: "", quantity: 1, unit: "kg", stock_product_id: null }]);
+  const [cargos, setCargos] = useState<Cargo[]>([{ description: "", quantity: 1, unit: "kg", stock_product_id: "" }]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -51,29 +50,60 @@ const NewRecordPage = () => {
   const [stockProducts, setStockProducts] = useState<StockProduct[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      const [stockRes, vehicleRes, supplierRes] = await Promise.all([
+      const [stockRes, vehicleRes, supplierRes, tokenRes] = await Promise.all([
         supabase.from("stock_products").select("id, name, unit").order("name"),
         supabase.from("vehicles").select("*").order("plate"),
         supabase.from("suppliers").select("*").order("name"),
+        supabase.functions.invoke("get-mapbox-token"),
       ]);
       setStockProducts((stockRes.data as StockProduct[]) || []);
       setVehicles((vehicleRes.data as Vehicle[]) || []);
       setSuppliers((supplierRes.data as Supplier[]) || []);
+      if (tokenRes.data?.token) setMapboxToken(tokenRes.data.token);
     };
     fetchData();
   }, []);
 
-  const addCargo = () => setCargos([...cargos, { description: "", quantity: 1, unit: "kg", stock_product_id: null }]);
-  const removeCargo = (i: number) => { if (cargos.length > 1) setCargos(cargos.filter((_, idx) => idx !== i)); };
+  // Initialize Mapbox map
+  useEffect(() => {
+    if (!mapboxToken || !mapContainerRef.current || mapRef.current) return;
+    
+    const initMap = async () => {
+      const mapboxgl = (await import("mapbox-gl")).default;
+      await import("mapbox-gl/dist/mapbox-gl.css");
+      
+      mapboxgl.accessToken = mapboxToken;
+      const map = new mapboxgl.Map({
+        container: mapContainerRef.current!,
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [-47.9292, -15.7801], // Brasília
+        zoom: 4,
+      });
+      map.addControl(new mapboxgl.NavigationControl(), "top-right");
+      mapRef.current = map;
 
-  const updateCargo = (i: number, key: keyof Cargo, value: string | number | null) => {
-    const updated = [...cargos];
-    (updated[i] as any)[key] = value;
-    setCargos(updated);
-  };
+      if (location) {
+        const marker = new mapboxgl.Marker({ color: "#22c55e" })
+          .setLngLat([location.lng, location.lat])
+          .addTo(map);
+        markerRef.current = marker;
+        map.flyTo({ center: [location.lng, location.lat], zoom: 15 });
+      }
+    };
+    initMap();
+    
+    return () => { mapRef.current?.remove(); mapRef.current = null; };
+  }, [mapboxToken]);
+
+  const addCargo = () => setCargos([...cargos, { description: "", quantity: 1, unit: "kg", stock_product_id: "" }]);
+  const removeCargo = (i: number) => { if (cargos.length > 1) setCargos(cargos.filter((_, idx) => idx !== i)); };
 
   const selectStockProduct = (i: number, productId: string) => {
     const product = stockProducts.find((p) => p.id === productId);
@@ -89,10 +119,25 @@ const NewRecordPage = () => {
     if (file) { setPhotoFile(file); setPhotoPreview(URL.createObjectURL(file)); }
   };
 
-  const getLocation = () => {
+  const getLocation = async () => {
     setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGettingLocation(false); toast.success("Localização obtida!"); },
+      async (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setLocation(coords);
+        setGettingLocation(false);
+        toast.success("Localização obtida!");
+
+        if (mapRef.current) {
+          const mapboxgl = (await import("mapbox-gl")).default;
+          if (markerRef.current) markerRef.current.remove();
+          const marker = new mapboxgl.Marker({ color: "#22c55e" })
+            .setLngLat([coords.lng, coords.lat])
+            .addTo(mapRef.current);
+          markerRef.current = marker;
+          mapRef.current.flyTo({ center: [coords.lng, coords.lat], zoom: 15 });
+        }
+      },
       () => { toast.error("Não foi possível obter a localização"); setGettingLocation(false); }
     );
   };
@@ -107,12 +152,11 @@ const NewRecordPage = () => {
       toast.error(operationType === "entry" ? "Informe a origem da mercadoria" : "Informe o destino da mercadoria");
       return;
     }
-    if (cargos.some((c) => !c.description.trim())) { toast.error("Preencha a descrição de todas as cargas"); return; }
+    if (cargos.some((c) => !c.stock_product_id)) { toast.error("Selecione o produto do estoque para todas as cargas"); return; }
     if (!photoFile) { toast.error("A foto da carga é obrigatória"); return; }
 
     setLoading(true);
 
-    // Upload photo
     const ext = photoFile.name.split(".").pop();
     const path = `${user!.id}/records/${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage.from("uploads").upload(path, photoFile);
@@ -122,9 +166,8 @@ const NewRecordPage = () => {
 
     const vehicle = vehicles.find((v) => v.id === selectedVehicleId);
 
-    // Convert Brasília datetime to UTC for storage
     const brasiliaDate = new Date(form.recordDate + ":00");
-    brasiliaDate.setHours(brasiliaDate.getHours() + 3); // Add 3h to get UTC
+    brasiliaDate.setHours(brasiliaDate.getHours() + 3);
 
     const { data: record, error: recordError } = await supabase
       .from("material_records")
@@ -278,7 +321,7 @@ const NewRecordPage = () => {
               {/* Cargos */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-base font-semibold">Cargas</Label>
+                  <Label className="text-base font-semibold">Cargas *</Label>
                   <Button type="button" variant="outline" size="sm" onClick={addCargo}>
                     <Plus className="w-4 h-4 mr-1" /> Adicionar Carga
                   </Button>
@@ -294,11 +337,13 @@ const NewRecordPage = () => {
                       )}
                     </div>
 
-                    {/* Stock product selection */}
-                    {stockProducts.length > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-sm text-muted-foreground">Selecionar do Estoque (opcional)</Label>
-                        <Select value={cargo.stock_product_id || ""} onValueChange={(v) => selectStockProduct(i, v)}>
+                    {/* Stock product selection - MANDATORY */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Selecionar do Estoque *</Label>
+                      {stockProducts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhum produto cadastrado no estoque pelo gerenciador.</p>
+                      ) : (
+                        <Select value={cargo.stock_product_id} onValueChange={(v) => selectStockProduct(i, v)}>
                           <SelectTrigger><SelectValue placeholder="Escolher produto do estoque..." /></SelectTrigger>
                           <SelectContent>
                             {stockProducts.map((p) => (
@@ -306,42 +351,41 @@ const NewRecordPage = () => {
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
+                      )}
+                    </div>
+
+                    {cargo.stock_product_id && (
+                      <p className="text-sm text-muted-foreground">Produto: <span className="font-medium text-foreground">{cargo.description}</span></p>
                     )}
 
-                    <div className="space-y-2">
-                      <Label className="text-sm">Descrição *</Label>
-                      <Input value={cargo.description} onChange={(e) => updateCargo(i, "description", e.target.value)} placeholder="Areia lavada, cimento, etc." readOnly={!!cargo.stock_product_id} />
-                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label className="text-sm">Quantidade *</Label>
-                        <Input type="number" min={0} step="0.01" value={cargo.quantity} onChange={(e) => updateCargo(i, "quantity", parseFloat(e.target.value) || 0)} />
+                        <Input type="number" min={0} step="0.01" value={cargo.quantity} onChange={(e) => {
+                          const updated = [...cargos];
+                          updated[i] = { ...updated[i], quantity: parseFloat(e.target.value) || 0 };
+                          setCargos(updated);
+                        }} />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-sm">Unidade *</Label>
-                        <Select value={cargo.unit} onValueChange={(v) => updateCargo(i, "unit", v)} disabled={!!cargo.stock_product_id}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="kg">Kg</SelectItem>
-                            <SelectItem value="ton">Tonelada</SelectItem>
-                            <SelectItem value="m3">m³</SelectItem>
-                            <SelectItem value="unidade">Unidade</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label className="text-sm">Unidade</Label>
+                        <Input value={cargo.unit} readOnly className="bg-muted" />
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Geolocation */}
+              {/* Geolocation with Mapbox */}
               <div className="space-y-2">
-                <Label>Geolocalização</Label>
+                <Label className="text-base font-semibold">Geolocalização</Label>
                 <Button type="button" variant="outline" onClick={getLocation} disabled={gettingLocation} className="w-full">
                   <MapPin className="w-4 h-4 mr-2" />
                   {gettingLocation ? "Obtendo..." : location ? `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : "Capturar Localização"}
                 </Button>
+                {mapboxToken && (
+                  <div ref={mapContainerRef} className="w-full h-48 sm:h-64 rounded-lg overflow-hidden border mt-2" />
+                )}
               </div>
 
               {/* Notes */}
