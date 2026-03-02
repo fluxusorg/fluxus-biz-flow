@@ -17,6 +17,7 @@ import VehiclesPage from "./pages/VehiclesPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotFound from "./pages/NotFound";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,7 @@ const App = () => (
             <Route path="/vehicles" element={<ProtectedRoute masterOnly><VehiclesPage /></ProtectedRoute>} />
             <Route path="/suppliers" element={<ProtectedRoute masterOnly><SuppliersPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/login" element={<Navigate to="/auth" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

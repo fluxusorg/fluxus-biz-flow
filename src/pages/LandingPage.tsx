@@ -2,19 +2,15 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Shield, MapPin, BarChart3, Users, Truck, Clock, CheckCircle2 } from "lucide-react";
-import logoFull from "@/assets/logo-full.png";
-import logoIcon from "@/assets/logo-icon.png";
+import Logo from "@/components/Logo";
 
 const LandingPage = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-20">
-          <div className="flex items-center gap-3">
-            <img src={logoIcon} alt="Fluxus" className="h-10 w-10 object-contain" />
-            <span className="text-2xl font-bold font-display text-foreground">Fluxus</span>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+          <Logo size="md" />
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Recursos</a>
             <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Como Funciona</a>
@@ -137,9 +133,8 @@ const LandingPage = () => {
       {/* CTA */}
       <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8 bg-muted/50">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <img src={logoIcon} alt="Fluxus" className="h-14 w-14 object-contain" />
-            <span className="text-3xl font-bold font-display text-foreground">Fluxus</span>
+          <div className="flex items-center justify-center mb-6">
+            <Logo size="xl" />
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold font-display">Pronto para transformar sua logística?</h2>
           <p className="mt-4 text-muted-foreground text-lg">
@@ -158,10 +153,7 @@ const LandingPage = () => {
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-border">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <img src={logoIcon} alt="Fluxus" className="h-8 w-8 object-contain" />
-            <span className="font-bold font-display text-foreground">Fluxus</span>
-          </div>
+          <Logo size="sm" />
           <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Fluxus. Todos os direitos reservados.</p>
         </div>
       </footer>

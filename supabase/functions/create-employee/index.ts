@@ -7,9 +7,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const requestId = crypto.randomUUID();
+    const url = new URL(req.url);
+    console.log(JSON.stringify({ requestId, stage: "start", method: req.method, pathname: url.pathname }));
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+      console.warn(JSON.stringify({ requestId, stage: "auth.header", error: "missing_authorization_header" }));
+      return new Response(JSON.stringify({ error: "Não autorizado", stage: "auth.header", requestId }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -29,34 +34,58 @@ Deno.serve(async (req) => {
     // Get the calling user
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
+      console.warn(JSON.stringify({ requestId, stage: "auth.getUser", userError: userError?.message || null }));
+      return new Response(JSON.stringify({ error: "Não autorizado", stage: "auth.getUser", requestId, details: userError?.message || null }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Verify caller is master
-    const { data: callerProfile } = await supabaseAdmin
+    const { data: callerProfile, error: callerProfileError } = await supabaseAdmin
       .from("profiles")
       .select("role, company_id")
       .eq("id", user.id)
       .single();
 
+    if (callerProfileError) {
+      console.error(JSON.stringify({ requestId, stage: "db.callerProfile", error: callerProfileError.message, userId: user.id }));
+      return new Response(JSON.stringify({ error: "Erro ao validar permissões", stage: "db.callerProfile", requestId, details: callerProfileError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!callerProfile || callerProfile.role !== "master") {
-      return new Response(JSON.stringify({ error: "Apenas gerenciadores podem criar funcionários" }), {
+      console.warn(JSON.stringify({ requestId, stage: "auth.role", error: "not_master", userId: user.id, role: callerProfile?.role || null }));
+      return new Response(JSON.stringify({ error: "Apenas gerenciadores podem criar funcionários", stage: "auth.role", requestId }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { email, password, fullName, position, operationLocation } = await req.json();
-
-    if (!email || !password || !fullName) {
-      return new Response(JSON.stringify({ error: "Campos obrigatórios não preenchidos" }), {
+    let payload: any;
+    try {
+      payload = await req.json();
+    } catch (_e) {
+      console.warn(JSON.stringify({ requestId, stage: "request.json", error: "invalid_json" }));
+      return new Response(JSON.stringify({ error: "Payload inválido", stage: "request.json", requestId }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const { email, password, fullName, position, operationLocation } = payload || {};
+
+    if (!email || !password || !fullName) {
+      console.warn(JSON.stringify({ requestId, stage: "request.validate", error: "missing_required_fields", hasEmail: !!email, hasPassword: !!password, hasFullName: !!fullName }));
+      return new Response(JSON.stringify({ error: "Campos obrigatórios não preenchidos", stage: "request.validate", requestId }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(JSON.stringify({ requestId, stage: "auth.createUser.start", callerUserId: user.id, companyId: callerProfile.company_id }));
 
     // Create auth user for employee
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -66,11 +95,14 @@ Deno.serve(async (req) => {
     });
 
     if (authError) {
-      return new Response(JSON.stringify({ error: authError.message }), {
+      console.error(JSON.stringify({ requestId, stage: "auth.createUser", error: authError.message, status: (authError as any).status || null }));
+      return new Response(JSON.stringify({ error: authError.message, stage: "auth.createUser", requestId }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log(JSON.stringify({ requestId, stage: "db.profile.insert.start", employeeUserId: authData.user.id, companyId: callerProfile.company_id }));
 
     // Create profile
     const { error: profileError } = await supabaseAdmin
@@ -85,18 +117,22 @@ Deno.serve(async (req) => {
       });
 
     if (profileError) {
+      console.error(JSON.stringify({ requestId, stage: "db.profile.insert", error: profileError.message, employeeUserId: authData.user.id }));
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return new Response(JSON.stringify({ error: profileError.message }), {
+      return new Response(JSON.stringify({ error: profileError.message, stage: "db.profile.insert", requestId }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    console.log(JSON.stringify({ requestId, stage: "success", employeeUserId: authData.user.id }));
     return new Response(JSON.stringify({ success: true, userId: authData.user.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : "Erro interno";
+    console.error(JSON.stringify({ stage: "catch", error: message }));
+    return new Response(JSON.stringify({ error: message, stage: "catch" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

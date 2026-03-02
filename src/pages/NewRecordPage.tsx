@@ -88,19 +88,25 @@ const NewRecordPage = () => {
       });
       map.addControl(new mapboxgl.NavigationControl(), "top-right");
       mapRef.current = map;
-
-      if (location) {
-        const marker = new mapboxgl.Marker({ color: "#22c55e" })
-          .setLngLat([location.lng, location.lat])
-          .addTo(map);
-        markerRef.current = marker;
-        map.flyTo({ center: [location.lng, location.lat], zoom: 15 });
-      }
     };
     initMap();
     
     return () => { mapRef.current?.remove(); mapRef.current = null; };
   }, [mapboxToken]);
+
+  useEffect(() => {
+    if (!location || !mapRef.current) return;
+    const applyLocation = async () => {
+      const mapboxgl = (await import("mapbox-gl")).default;
+      if (markerRef.current) markerRef.current.remove();
+      const marker = new mapboxgl.Marker({ color: "#22c55e" })
+        .setLngLat([location.lng, location.lat])
+        .addTo(mapRef.current);
+      markerRef.current = marker;
+      mapRef.current.flyTo({ center: [location.lng, location.lat], zoom: 15 });
+    };
+    applyLocation();
+  }, [location]);
 
   const addCargo = () => setCargos([...cargos, { description: "", quantity: 1, unit: "kg", stock_product_id: "" }]);
   const removeCargo = (i: number) => { if (cargos.length > 1) setCargos(cargos.filter((_, idx) => idx !== i)); };

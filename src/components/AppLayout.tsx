@@ -1,9 +1,10 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard, Package, ChevronLeft, ChevronRight, Truck, MapPin, UserCircle } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import logoIcon from "@/assets/logo-icon.png";
+import Logo from "@/components/Logo";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -14,6 +15,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
   const isMaster = profile?.role === "master";
 
   const navItems = isMaster
@@ -33,13 +35,24 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         { label: "Meu Perfil", icon: UserCircle, path: "/profile" },
       ];
 
+  useEffect(() => {
+    if (!isMaster) return;
+    const fetchCount = async () => {
+      const { count } = await supabase
+        .from("profile_edit_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      setPendingApprovals(count || 0);
+    };
+    fetchCount();
+  }, [isMaster, location.pathname]);
+
   return (
     <div className="min-h-screen flex bg-background">
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col gradient-hero text-primary-foreground transition-all duration-300 ${collapsed ? "w-[72px]" : "w-64"}`}>
-        <div className={`p-4 border-b border-white/10 flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
-          <img src={logoIcon} alt="Fluxus" className="h-9 w-9 object-contain shrink-0" />
-          {!collapsed && <span className="text-xl font-bold font-display tracking-tight">Fluxus</span>}
+        <div className={`p-4 border-b border-white/10 flex items-center h-16 ${collapsed ? "justify-center" : "gap-2"}`}>
+          <Logo size="sm" variant="white" showText={!collapsed} />
         </div>
 
         {!collapsed && company && (
@@ -67,8 +80,22 @@ const AppLayout = ({ children }: AppLayoutProps) => {
                   : "text-white/70 hover:bg-white/10 hover:text-white"
               }`}
             >
-              <item.icon className="w-5 h-5 shrink-0" />
-              {!collapsed && item.label}
+              <div className="relative shrink-0">
+                <item.icon className="w-5 h-5" />
+                {item.path === "/employees" && pendingApprovals > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-white" />
+                )}
+              </div>
+              {!collapsed && (
+                <span className="flex items-center gap-2">
+                  {item.label}
+                  {item.path === "/employees" && pendingApprovals > 0 && (
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-white/15 text-white">
+                      {pendingApprovals}
+                    </span>
+                  )}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -111,14 +138,11 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
       {/* Mobile header */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card sticky top-0 z-40">
+        <header className="md:hidden flex items-center justify-between px-4 bar-mobile border-b bg-card sticky top-0 z-40">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1">
             {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
-          <div className="flex items-center gap-2">
-            <img src={logoIcon} alt="Fluxus" className="h-8 w-8 object-contain" />
-            <span className="text-lg font-bold font-display">Fluxus</span>
-          </div>
+          <Logo size="sm" />
           <Button variant="ghost" size="icon" onClick={signOut}>
             <LogOut className="w-5 h-5" />
           </Button>
@@ -127,11 +151,8 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         {/* Mobile nav overlay */}
         {sidebarOpen && (
           <div className="md:hidden fixed inset-0 z-50 bg-background/95 backdrop-blur-sm">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <div className="flex items-center gap-2">
-                <img src={logoIcon} alt="Fluxus" className="h-8 w-8 object-contain" />
-                <span className="text-lg font-bold font-display">Fluxus</span>
-              </div>
+            <div className="flex items-center justify-between px-4 bar-mobile border-b">
+              <Logo size="sm" />
               <button onClick={() => setSidebarOpen(false)} className="p-1">
                 <X className="w-6 h-6" />
               </button>
@@ -160,8 +181,20 @@ const AppLayout = ({ children }: AppLayoutProps) => {
                       : "text-foreground hover:bg-muted"
                   }`}
                 >
-                  <item.icon className="w-5 h-5" />
-                  {item.label}
+                  <div className="relative shrink-0">
+                    <item.icon className="w-5 h-5" />
+                    {item.path === "/employees" && pendingApprovals > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <span className="flex items-center gap-2">
+                    {item.label}
+                    {item.path === "/employees" && pendingApprovals > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                        {pendingApprovals}
+                      </span>
+                    )}
+                  </span>
                 </Link>
               ))}
             </div>

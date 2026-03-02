@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Link } from "react-router-dom";
 import { Plus, ArrowDownCircle, ArrowUpCircle, Truck, Calendar, Image, Filter, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import LocationView from "@/components/LocationView";
 
 interface FilterState {
   vehiclePlate: string;
@@ -283,7 +284,7 @@ const RecordsPage = () => {
                 )}
 
                 {selectedRecord.latitude && selectedRecord.longitude && (
-                  <p className="text-xs text-muted-foreground">📍 {selectedRecord.latitude.toFixed(5)}, {selectedRecord.longitude.toFixed(5)}</p>
+                  <LocationView latitude={selectedRecord.latitude} longitude={selectedRecord.longitude} />
                 )}
 
                 {selectedRecord.notes && (

@@ -2,12 +2,11 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, Clock, CheckCircle2, XCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Camera } from "lucide-react";
 import { toast } from "sonner";
 
 const ProfilePage = () => {
@@ -21,7 +20,6 @@ const ProfilePage = () => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
   useEffect(() => {
     if (profile) {
@@ -33,20 +31,6 @@ const ProfilePage = () => {
       setPhotoPreview(profile.photo_url || null);
     }
   }, [profile]);
-
-  useEffect(() => {
-    if (isMaster) {
-      const fetchRequests = async () => {
-        const { data } = await supabase
-          .from("profile_edit_requests")
-          .select("*, profiles(full_name)")
-          .eq("status", "pending")
-          .order("created_at", { ascending: false });
-        setPendingRequests(data || []);
-      };
-      fetchRequests();
-    }
-  }, [isMaster]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,14 +47,28 @@ const ProfilePage = () => {
 
     let photoUrl = profile?.photo_url || null;
     if (photoFile) {
+      console.log("Starting photo upload...", photoFile.name);
       const ext = photoFile.name.split(".").pop();
       const path = `${user!.id}/profile/${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("uploads").upload(path, photoFile);
-      if (!uploadError) {
+      const { error: uploadError, data: uploadData } = await supabase.storage.from("uploads").upload(path, photoFile);
+      
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        toast.error(`Erro ao enviar foto: ${uploadError.message}`);
+        // If upload fails, we probably shouldn't continue with a broken/old URL if the user intended to change it
+        setSaving(false);
+        return;
+      }
+
+      if (uploadData) {
         const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(path);
         photoUrl = urlData.publicUrl;
+        console.log("Photo uploaded successfully. URL:", photoUrl);
       }
     }
+
+    const payload = { ...form, photo_url: photoUrl };
+    console.log("Saving profile with payload:", payload);
 
     if (isMaster) {
       // Master can update directly
@@ -94,28 +92,6 @@ const ProfilePage = () => {
       if (error) toast.error(error.message);
       else toast.success("Solicitação de alteração enviada para aprovação do gerenciador!");
     }
-  };
-
-  const handleApprove = async (req: any) => {
-    const changes = req.requested_changes as Record<string, any>;
-    const { error: updateError } = await supabase.from("profiles").update({
-      full_name: changes.full_name,
-      position: changes.position || null,
-      operation_location: changes.operation_location || null,
-      photo_url: changes.photo_url || null,
-    }).eq("id", req.profile_id);
-
-    if (updateError) { toast.error(updateError.message); return; }
-
-    await supabase.from("profile_edit_requests").update({ status: "approved", reviewed_at: new Date().toISOString() }).eq("id", req.id);
-    toast.success("Alteração aprovada!");
-    setPendingRequests((prev) => prev.filter((r) => r.id !== req.id));
-  };
-
-  const handleReject = async (req: any) => {
-    await supabase.from("profile_edit_requests").update({ status: "rejected", reviewed_at: new Date().toISOString() }).eq("id", req.id);
-    toast.success("Alteração rejeitada");
-    setPendingRequests((prev) => prev.filter((r) => r.id !== req.id));
   };
 
   return (
@@ -169,43 +145,6 @@ const ProfilePage = () => {
             </form>
           </CardContent>
         </Card>
-
-        {/* Pending edit requests for master */}
-        {isMaster && pendingRequests.length > 0 && (
-          <Card className="border shadow-sm">
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2">
-                <Clock className="w-5 h-5" /> Solicitações de Alteração Pendentes
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {pendingRequests.map((req) => {
-                const changes = req.requested_changes as Record<string, any>;
-                return (
-                  <div key={req.id} className="p-4 rounded-lg bg-muted/50 border space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-sm">{req.profiles?.full_name || "Funcionário"}</p>
-                      <Badge variant="outline">Pendente</Badge>
-                    </div>
-                    <div className="text-sm space-y-1">
-                      {changes.full_name && <p><span className="text-muted-foreground">Nome:</span> {changes.full_name}</p>}
-                      {changes.position && <p><span className="text-muted-foreground">Cargo:</span> {changes.position}</p>}
-                      {changes.operation_location && <p><span className="text-muted-foreground">Local:</span> {changes.operation_location}</p>}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => handleApprove(req)}>
-                        <CheckCircle2 className="w-4 h-4 mr-1" /> Aprovar
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleReject(req)}>
-                        <XCircle className="w-4 h-4 mr-1" /> Rejeitar
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        )}
       </div>
     </AppLayout>
   );

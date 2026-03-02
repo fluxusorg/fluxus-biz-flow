@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,15 +8,18 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, User, LogIn, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import logoIcon from "@/assets/logo-icon.png";
+import Logo from "@/components/Logo";
 import heroBg from "@/assets/hero-bg.jpg";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 
 const LoginPage = () => {
   const { signIn } = useAuth();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +33,21 @@ const LoginPage = () => {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo });
+    setResetLoading(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Enviamos um e-mail para redefinir sua senha.");
+  };
+
   return (
     <div className="min-h-screen flex">
       {/* Left panel - Hero */}
@@ -39,9 +57,8 @@ const LoginPage = () => {
       >
         <div className="absolute inset-0 bg-primary/60" />
         <div className="relative z-10 text-primary-foreground max-w-lg">
-          <div className="flex items-center gap-3 mb-6">
-            <img src={logoIcon} alt="Fluxus" className="h-14 w-14 object-contain brightness-0 invert" />
-            <span className="text-4xl font-bold font-display">Fluxus</span>
+          <div className="mb-6">
+            <Logo size="xl" variant="white" />
           </div>
           <p className="text-xl opacity-90 leading-relaxed">
             Gestão inteligente de entrada e saída de materiais. 
@@ -68,9 +85,8 @@ const LoginPage = () => {
       <div className="flex-1 flex items-center justify-center p-6 bg-background">
         <div className="w-full max-w-md">
           <div className="text-center mb-8 lg:hidden">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <img src={logoIcon} alt="Fluxus" className="h-12 w-12 object-contain" />
-              <span className="text-2xl font-bold font-display">Fluxus</span>
+            <div className="flex justify-center mb-4">
+              <Logo size="lg" className="flex-col" />
             </div>
             <p className="text-muted-foreground mt-1">Gestão de materiais</p>
           </div>
@@ -101,6 +117,51 @@ const LoginPage = () => {
                       <Label htmlFor="company-password">Senha</Label>
                       <Input id="company-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
                     </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground hover:underline">
+                            Esqueci minha senha
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle className="font-display">Redefinir senha</DialogTitle>
+                          </DialogHeader>
+                          <form onSubmit={handleResetPassword} className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>E-mail</Label>
+                              <Input
+                                type="email"
+                                value={resetEmail}
+                                onChange={(e) => setResetEmail(e.target.value)}
+                                required
+                                placeholder="seuemail@empresa.com"
+                              />
+                            </div>
+                            <Button type="submit" className="w-full" disabled={resetLoading}>
+                              {resetLoading ? "Enviando..." : "Enviar link"}
+                            </Button>
+                          </form>
+                        </DialogContent>
+                      </Dialog>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground hover:underline">
+                            Esqueci meu e-mail
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle className="font-display">Recuperar e-mail</DialogTitle>
+                          </DialogHeader>
+                          <div className="text-sm text-muted-foreground space-y-2">
+                            <p>Procure por mensagens do Fluxus/Supabase na sua caixa de e-mail (convite/confirmação).</p>
+                            <p>Se você ainda não encontrar, peça ao gerenciador da empresa para confirmar o e-mail cadastrado.</p>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? "Entrando..." : "Entrar como Gerenciador"} <LogIn className="w-4 h-4 ml-2" />
                     </Button>
@@ -116,6 +177,35 @@ const LoginPage = () => {
                     <div className="space-y-2">
                       <Label htmlFor="emp-password">Senha</Label>
                       <Input id="emp-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                    </div>
+                    <div className="text-sm">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground hover:underline">
+                            Esqueci minha senha
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle className="font-display">Redefinir senha</DialogTitle>
+                          </DialogHeader>
+                          <form onSubmit={handleResetPassword} className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>E-mail</Label>
+                              <Input
+                                type="email"
+                                value={resetEmail}
+                                onChange={(e) => setResetEmail(e.target.value)}
+                                required
+                                placeholder="seuemail@empresa.com"
+                              />
+                            </div>
+                            <Button type="submit" className="w-full" disabled={resetLoading}>
+                              {resetLoading ? "Enviando..." : "Enviar link"}
+                            </Button>
+                          </form>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? "Entrando..." : "Entrar como Funcionário"} <LogIn className="w-4 h-4 ml-2" />

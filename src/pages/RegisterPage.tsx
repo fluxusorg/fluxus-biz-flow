@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Plus, X, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import logoIcon from "@/assets/logo-icon.png";
+import Logo from "@/components/Logo";
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -27,6 +27,27 @@ const RegisterPage = () => {
   const addBranch = () => { if (newBranch.trim()) { setBranches((prev) => [...prev, newBranch.trim()]); setNewBranch(""); } };
   const removeBranch = (index: number) => setBranches((prev) => prev.filter((_, i) => i !== index));
 
+  const registerCompany = async (body: any) => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    const res = await fetch(`${supabaseUrl}/functions/v1/register-company?apikey=${encodeURIComponent(anonKey)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json?.error || `Erro ao cadastrar (${res.status})`);
+    }
+    return json;
+  };
+
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) { setLogoFile(file); setLogoPreview(URL.createObjectURL(file)); }
@@ -39,29 +60,39 @@ const RegisterPage = () => {
     setLoading(true);
 
     let logoUrl: string | null = null;
-    if (logoFile) {
-      const ext = logoFile.name.split(".").pop();
-      const path = `company-logos/${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("uploads").upload(path, logoFile);
-      if (!uploadError) {
+    try {
+      if (logoFile) {
+        const ext = logoFile.name.split(".").pop();
+        const path = `company-logos/${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("uploads").upload(path, logoFile, { upsert: true });
+        if (uploadError) {
+          throw new Error(`Erro ao enviar logo: ${uploadError.message}`);
+        }
+
         const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(path);
         logoUrl = urlData.publicUrl;
       }
+
+      await registerCompany({
+        email: form.email,
+        password: form.password,
+        companyName: form.companyName,
+        cnpj: form.cnpj,
+        headquartersAddress: form.headquartersAddress,
+        branchAddresses: branches,
+        managerName: form.managerName,
+        managerPosition: form.managerPosition,
+        logoUrl,
+        redirectTo: `${window.location.origin}/auth`,
+      });
+
+      toast.success("Empresa cadastrada! Verifique seu e-mail para confirmar o acesso.");
+      navigate("/auth");
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao cadastrar");
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error } = await supabase.functions.invoke("register-company", {
-      body: {
-        email: form.email, password: form.password,
-        companyName: form.companyName, cnpj: form.cnpj,
-        headquartersAddress: form.headquartersAddress, branchAddresses: branches,
-        managerName: form.managerName, managerPosition: form.managerPosition, logoUrl,
-      },
-    });
-
-    setLoading(false);
-    if (error || data?.error) { toast.error(data?.error || error?.message || "Erro ao cadastrar"); return; }
-    toast.success("Empresa cadastrada com sucesso! Faça login.");
-    navigate("/auth");
   };
 
   return (
@@ -75,9 +106,8 @@ const RegisterPage = () => {
 
         <Card className="border-0 shadow-xl">
           <CardHeader className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <img src={logoIcon} alt="Fluxus" className="h-12 w-12 object-contain" />
-              <span className="text-2xl font-bold font-display">Fluxus</span>
+            <div className="flex justify-center mb-4">
+              <Logo size="lg" className="flex-col" />
             </div>
             <h2 className="text-2xl font-bold font-display">Cadastro da Empresa</h2>
             <p className="text-muted-foreground text-sm">Crie a conta master da sua empresa no Fluxus</p>

@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, password, companyName, cnpj, headquartersAddress, branchAddresses, managerName, managerPosition, logoUrl } = await req.json();
+    const { email, password, companyName, cnpj, headquartersAddress, branchAddresses, managerName, managerPosition, logoUrl, redirectTo } = await req.json();
 
     if (!email || !password || !companyName || !cnpj || !managerName || !managerPosition) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios não preenchidos" }), {
@@ -37,32 +37,46 @@ Deno.serve(async (req) => {
       .single();
 
     if (companyError) {
-      return new Response(JSON.stringify({ error: companyError.message }), {
+      console.error("Company creation error:", companyError);
+      return new Response(JSON.stringify({ error: `Erro ao criar empresa: ${companyError.message}`, details: companyError }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Create auth user
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
+    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: typeof redirectTo === "string" ? redirectTo : undefined,
     });
 
-    if (authError) {
+    if (inviteError || !inviteData?.user?.id) {
+      console.error("Auth invite error:", inviteError);
       await supabaseAdmin.from("companies").delete().eq("id", company.id);
-      return new Response(JSON.stringify({ error: authError.message }), {
+      return new Response(JSON.stringify({ error: `Erro ao enviar convite: ${inviteError?.message || "Falha ao convidar usuário"}`, details: inviteError }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const userId = inviteData.user.id;
+
+    if (password) {
+      const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+      if (pwError) {
+        console.error("Password update error:", pwError);
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        await supabaseAdmin.from("companies").delete().eq("id", company.id);
+        return new Response(JSON.stringify({ error: `Erro ao definir senha: ${pwError.message}`, details: pwError }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Create profile
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
-        id: authData.user.id,
+        id: userId,
         company_id: company.id,
         role: "master",
         full_name: managerName,
@@ -70,9 +84,10 @@ Deno.serve(async (req) => {
       });
 
     if (profileError) {
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      console.error("Profile creation error:", profileError);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
       await supabaseAdmin.from("companies").delete().eq("id", company.id);
-      return new Response(JSON.stringify({ error: profileError.message }), {
+      return new Response(JSON.stringify({ error: `Erro ao criar perfil: ${profileError.message}`, details: profileError }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
