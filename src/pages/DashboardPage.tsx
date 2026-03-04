@@ -11,42 +11,139 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const DashboardPage = () => {
   const { profile, company } = useAuth();
   const isMaster = profile?.role === "master";
-  const [stats, setStats] = useState({ total: 0, entries: 0, exits: 0, employees: 0 });
+  const [stats, setStats] = useState({ 
+    total: { value: 0, trend: 0 }, 
+    entries: { value: 0, trend: 0 }, 
+    exits: { value: 0, trend: 0 }, 
+    employees: { value: 0, trend: 0 } 
+  });
   const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
       if (!profile) return;
 
-      // Basic stats
+      const now = new Date();
+      const startCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+
+      // --- 1. TOTAL RECORDS ---
+      // All time
       const { count: total } = await supabase
         .from("material_records")
         .select("*", { count: "exact", head: true });
+      
+      // Current Month
+      const { count: totalCurrent } = await supabase
+        .from("material_records")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", startCurrentMonth);
 
+      // Last Month
+      const { count: totalLast } = await supabase
+        .from("material_records")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", startLastMonth)
+        .lt("created_at", startCurrentMonth);
+
+      // --- 2. ENTRIES ---
+      // All time
       const { count: entries } = await supabase
         .from("material_records")
         .select("*", { count: "exact", head: true })
         .eq("operation_type", "entry");
 
+      // Current Month
+      const { count: entriesCurrent } = await supabase
+        .from("material_records")
+        .select("*", { count: "exact", head: true })
+        .eq("operation_type", "entry")
+        .gte("created_at", startCurrentMonth);
+
+      // Last Month
+      const { count: entriesLast } = await supabase
+        .from("material_records")
+        .select("*", { count: "exact", head: true })
+        .eq("operation_type", "entry")
+        .gte("created_at", startLastMonth)
+        .lt("created_at", startCurrentMonth);
+
+      // --- 3. EXITS ---
+      // All time
       const { count: exits } = await supabase
         .from("material_records")
         .select("*", { count: "exact", head: true })
         .eq("operation_type", "exit");
 
+      // Current Month
+      const { count: exitsCurrent } = await supabase
+        .from("material_records")
+        .select("*", { count: "exact", head: true })
+        .eq("operation_type", "exit")
+        .gte("created_at", startCurrentMonth);
+
+      // Last Month
+      const { count: exitsLast } = await supabase
+        .from("material_records")
+        .select("*", { count: "exact", head: true })
+        .eq("operation_type", "exit")
+        .gte("created_at", startLastMonth)
+        .lt("created_at", startCurrentMonth);
+
+      // --- 4. EMPLOYEES ---
       let employeeCount = 0;
+      let employeesCurrent = 0;
+      let employeesLast = 0;
+
       if (isMaster) {
+        // All time
         const { count } = await supabase
           .from("profiles")
           .select("*", { count: "exact", head: true })
           .eq("role", "employee");
         employeeCount = count || 0;
+
+        // Current Month
+        const { count: empCur } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "employee")
+          .gte("created_at", startCurrentMonth);
+        employeesCurrent = empCur || 0;
+
+        // Last Month
+        const { count: empLast } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "employee")
+          .gte("created_at", startLastMonth)
+          .lt("created_at", startCurrentMonth);
+        employeesLast = empLast || 0;
       }
 
+      // Calculate Trends
+      const calcTrend = (current: number, last: number) => {
+        if (last === 0) return current > 0 ? 100 : 0; // If no previous data, assume 100% growth if there is data now
+        return Math.round(((current - last) / last) * 100);
+      };
+
       setStats({
-        total: total || 0,
-        entries: entries || 0,
-        exits: exits || 0,
-        employees: employeeCount,
+        total: { 
+          value: total || 0, 
+          trend: calcTrend(totalCurrent || 0, totalLast || 0) 
+        },
+        entries: { 
+          value: entries || 0, 
+          trend: calcTrend(entriesCurrent || 0, entriesLast || 0) 
+        },
+        exits: { 
+          value: exits || 0, 
+          trend: calcTrend(exitsCurrent || 0, exitsLast || 0) 
+        },
+        employees: { 
+          value: employeeCount, 
+          trend: calcTrend(employeesCurrent, employeesLast) 
+        },
       });
 
       // Chart data (last 7 days)
@@ -91,7 +188,8 @@ const DashboardPage = () => {
   const statCards = [
     { 
       label: "Total de Registros", 
-      value: stats.total, 
+      value: stats.total.value,
+      trend: stats.total.trend,
       icon: FileText, 
       color: "text-primary",
       bg: "bg-primary/10",
@@ -99,7 +197,8 @@ const DashboardPage = () => {
     },
     { 
       label: "Entradas", 
-      value: stats.entries, 
+      value: stats.entries.value,
+      trend: stats.entries.trend,
       icon: ArrowDownCircle, 
       color: "text-emerald-500",
       bg: "bg-emerald-500/10",
@@ -107,7 +206,8 @@ const DashboardPage = () => {
     },
     { 
       label: "Saídas", 
-      value: stats.exits, 
+      value: stats.exits.value,
+      trend: stats.exits.trend,
       icon: ArrowUpCircle, 
       color: "text-blue-500",
       bg: "bg-blue-500/10",
@@ -116,7 +216,8 @@ const DashboardPage = () => {
     ...(isMaster
       ? [{ 
           label: "Funcionários", 
-          value: stats.employees, 
+          value: stats.employees.value,
+          trend: stats.employees.trend,
           icon: Users, 
           color: "text-violet-500",
           bg: "bg-violet-500/10",
@@ -158,28 +259,33 @@ const DashboardPage = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {statCards.map((stat) => (
-            <Card key={stat.label} className="border shadow-sm hover:shadow-md transition-all hover:-translate-y-1 duration-300">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">{stat.label}</p>
-                    <h3 className="text-3xl font-bold font-display tracking-tight">{stat.value}</h3>
+          {statCards.map((stat) => {
+            const isPositive = stat.trend >= 0;
+            const trendColor = isPositive ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10";
+            
+            return (
+              <Card key={stat.label} className="border shadow-sm hover:shadow-md transition-all hover:-translate-y-1 duration-300">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">{stat.label}</p>
+                      <h3 className="text-3xl font-bold font-display tracking-tight">{stat.value}</h3>
+                    </div>
+                    <div className={`p-3 rounded-xl ${stat.bg}`}>
+                      <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                    </div>
                   </div>
-                  <div className={`p-3 rounded-xl ${stat.bg}`}>
-                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                  <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className={`inline-flex items-center font-medium px-1.5 py-0.5 rounded ${trendColor}`}>
+                      <TrendingUp className={`w-3 h-3 mr-1 ${!isPositive && "rotate-180"}`} />
+                      {stat.trend > 0 ? "+" : ""}{stat.trend}%
+                    </span>
+                    <span>vs. mês anterior</span>
                   </div>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center text-emerald-500 font-medium bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    +12%
-                  </span>
-                  <span>vs. mês anterior</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

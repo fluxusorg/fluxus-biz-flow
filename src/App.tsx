@@ -11,6 +11,7 @@ import DashboardPage from "./pages/DashboardPage";
 import EmployeesPage from "./pages/EmployeesPage";
 import RecordsPage from "./pages/RecordsPage";
 import NewRecordPage from "./pages/NewRecordPage";
+import ReportsPage from "./pages/ReportsPage";
 import CompanyPage from "./pages/CompanyPage";
 import StockPage from "./pages/StockPage";
 import VehiclesPage from "./pages/VehiclesPage";
@@ -72,6 +73,7 @@ const App = () => (
             <Route path="/employees" element={<ProtectedRoute masterOnly><EmployeesPage /></ProtectedRoute>} />
             <Route path="/records" element={<ProtectedRoute><RecordsPage /></ProtectedRoute>} />
             <Route path="/new-record" element={<ProtectedRoute><NewRecordPage /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
             <Route path="/company" element={<ProtectedRoute masterOnly><CompanyPage /></ProtectedRoute>} />
             <Route path="/stock" element={<ProtectedRoute masterOnly><StockPage /></ProtectedRoute>} />
             <Route path="/vehicles" element={<ProtectedRoute masterOnly><VehiclesPage /></ProtectedRoute>} />

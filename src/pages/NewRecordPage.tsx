@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/AppLayout";
@@ -11,7 +11,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Plus, X, MapPin, Camera } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+
+// Fix Leaflet icon issue
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+});
 
 interface Cargo {
   description: string;
@@ -24,13 +33,26 @@ interface StockProduct { id: string; name: string; unit: string; }
 interface Vehicle { id: string; plate: string; brand: string | null; model: string | null; color: string | null; }
 interface Supplier { id: string; name: string; type: string; }
 
-const getBrasiliaDatetime = () => {
+const getLocalDatetime = () => {
   const now = new Date();
-  const brasiliaOffset = -3 * 60;
-  const localOffset = now.getTimezoneOffset();
-  const diff = brasiliaOffset - (-localOffset);
-  const brasilia = new Date(now.getTime() + diff * 60000);
-  return brasilia.toISOString().slice(0, 16);
+  // Return local datetime in ISO format without timezone offset (for datetime-local input)
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+// Component to update map view when location changes
+const MapUpdater = ({ center }: { center: { lat: number; lng: number } | null }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.flyTo([center.lat, center.lng], 15);
+    }
+  }, [center, map]);
+  return null;
 };
 
 const NewRecordPage = () => {
@@ -38,12 +60,18 @@ const NewRecordPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [operationType, setOperationType] = useState<string>("");
-  const [form, setForm] = useState({ recordDate: getBrasiliaDatetime(), notes: "" });
+  const [form, setForm] = useState({ recordDate: getLocalDatetime(), notes: "" });
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
-  const [originDestType, setOriginDestType] = useState<string>("");
-  const [originDestSupplierId, setOriginDestSupplierId] = useState<string>("");
+  
+  // New State for explicit Origin/Destination
+  const [originType, setOriginType] = useState<string>(""); // "internal" | "external"
+  const [originId, setOriginId] = useState<string>("");
+  const [destType, setDestType] = useState<string>(""); // "internal" | "external"
+  const [destId, setDestId] = useState<string>("");
+
   const [cargos, setCargos] = useState<Cargo[]>([{ description: "", quantity: 1, unit: "kg", stock_product_id: "" }]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [address, setAddress] = useState<string | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -51,62 +79,53 @@ const NewRecordPage = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+
+  // Fetch Mapbox token on mount
+  useEffect(() => {
+    const fetchMapboxToken = async () => {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/get-mapbox-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": anonKey,
+            "Authorization": `Bearer ${anonKey}`,
+          },
+        });
+        
+        console.log("Mapbox token response status:", response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Mapbox token error response:", errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        if (data?.token) setMapboxToken(data.token);
+      } catch (err) {
+        console.error('Error fetching Mapbox token:', err);
+      }
+    };
+    fetchMapboxToken();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
-      const [stockRes, vehicleRes, supplierRes, tokenRes] = await Promise.all([
+      const [stockRes, vehicleRes, supplierRes] = await Promise.all([
         supabase.from("stock_products").select("id, name, unit").order("name"),
         supabase.from("vehicles").select("*").order("plate"),
         supabase.from("suppliers").select("*").order("name"),
-        supabase.functions.invoke("get-mapbox-token"),
       ]);
       setStockProducts((stockRes.data as StockProduct[]) || []);
       setVehicles((vehicleRes.data as Vehicle[]) || []);
       setSuppliers((supplierRes.data as Supplier[]) || []);
-      if (tokenRes.data?.token) setMapboxToken(tokenRes.data.token);
     };
     fetchData();
   }, []);
-
-  // Initialize Mapbox map
-  useEffect(() => {
-    if (!mapboxToken || !mapContainerRef.current || mapRef.current) return;
-    
-    const initMap = async () => {
-      const mapboxgl = (await import("mapbox-gl")).default;
-      await import("mapbox-gl/dist/mapbox-gl.css");
-      
-      mapboxgl.accessToken = mapboxToken;
-      const map = new mapboxgl.Map({
-        container: mapContainerRef.current!,
-        style: "mapbox://styles/mapbox/streets-v12",
-        center: [-47.9292, -15.7801], // Brasília
-        zoom: 4,
-      });
-      map.addControl(new mapboxgl.NavigationControl(), "top-right");
-      mapRef.current = map;
-    };
-    initMap();
-    
-    return () => { mapRef.current?.remove(); mapRef.current = null; };
-  }, [mapboxToken]);
-
-  useEffect(() => {
-    if (!location || !mapRef.current) return;
-    const applyLocation = async () => {
-      const mapboxgl = (await import("mapbox-gl")).default;
-      if (markerRef.current) markerRef.current.remove();
-      const marker = new mapboxgl.Marker({ color: "#22c55e" })
-        .setLngLat([location.lng, location.lat])
-        .addTo(mapRef.current);
-      markerRef.current = marker;
-      mapRef.current.flyTo({ center: [location.lng, location.lat], zoom: 15 });
-    };
-    applyLocation();
-  }, [location]);
 
   const addCargo = () => setCargos([...cargos, { description: "", quantity: 1, unit: "kg", stock_product_id: "" }]);
   const removeCargo = (i: number) => { if (cargos.length > 1) setCargos(cargos.filter((_, idx) => idx !== i)); };
@@ -127,37 +146,151 @@ const NewRecordPage = () => {
 
   const getLocation = async () => {
     setGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setLocation(coords);
-        setGettingLocation(false);
-        toast.success("Localização obtida!");
+    if (!navigator.geolocation) {
+      toast.error("Geolocalização não suportada pelo navegador");
+      setGettingLocation(false);
+      return;
+    }
 
-        if (mapRef.current) {
-          const mapboxgl = (await import("mapbox-gl")).default;
-          if (markerRef.current) markerRef.current.remove();
-          const marker = new mapboxgl.Marker({ color: "#22c55e" })
-            .setLngLat([coords.lng, coords.lat])
-            .addTo(mapRef.current);
-          markerRef.current = marker;
-          mapRef.current.flyTo({ center: [coords.lng, coords.lat], zoom: 15 });
+    const getPosition = (opts: PositionOptions): Promise<GeolocationPosition> => {
+      return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, opts);
+      });
+    };
+
+    const processPosition = async (pos: GeolocationPosition) => {
+      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setLocation(coords);
+      
+      // Verificar se tem token do Mapbox
+      let token = mapboxToken;
+      if (!token) {
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          
+          const response = await fetch(`${supabaseUrl}/functions/v1/get-mapbox-token`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": anonKey,
+              "Authorization": `Bearer ${anonKey}`,
+            },
+          });
+          
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          const data = await response.json();
+          if (data?.token) {
+            token = data.token;
+            setMapboxToken(data.token);
+          }
+        } catch (e) {
+          console.error('Error fetching Mapbox token:', e);
         }
-      },
-      () => { toast.error("Não foi possível obter a localização"); setGettingLocation(false); }
-    );
+      }
+      
+      // Se não tem token, usar coordenadas como fallback
+      if (!token) {
+        setAddress(`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`);
+        toast.success("Localização obtida (sem token Mapbox)!");
+        setGettingLocation(false);
+        return;
+      }
+      
+      try {
+        // Mapbox Reverse Geocoding API - formato: longitude,latitude
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${coords.lng},${coords.lat}.json?access_token=${token}&language=pt&types=address,poi,neighborhood,locality,place&limit=1`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`Mapbox API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Mapbox response:", data);
+        
+        if (data.features && data.features.length > 0) {
+          const feature = data.features[0];
+          const placeName = feature.place_name;
+          
+          // Limpar o nome do lugar: remove país e código postal quando possível
+          let cleanAddress = placeName;
+          
+          // Remover "Brazil" ou código postal no final
+          const addressParts = placeName.split(',').map(p => p.trim());
+          const filteredParts = addressParts.filter(part => {
+            const lower = part.toLowerCase();
+            return !lower.includes('brazil') && 
+                   !lower.includes('brasil') && 
+                   !/^\d{5}-?\d{3}$/.test(part); // Remove CEP se estiver sozinho
+          });
+          
+          if (filteredParts.length > 0) {
+            cleanAddress = filteredParts.join(', ');
+          }
+          
+          setAddress(cleanAddress);
+          toast.success("Localização e endereço obtidos!");
+        } else {
+          setAddress(`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`);
+          toast.success("Localização obtida (sem detalhes de endereço)");
+        }
+      } catch (error) {
+        console.error("Error fetching address from Mapbox:", error);
+        // Fallback para coordenadas
+        setAddress(`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`);
+        toast.success("Localização obtida (endereço indisponível)");
+      }
+      setGettingLocation(false);
+    };
+
+    try {
+      // First attempt: High Accuracy with short timeout
+      try {
+        const pos = await getPosition({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+        await processPosition(pos);
+        return;
+      } catch (err) {
+        console.warn("High accuracy failed, retrying with low accuracy...", err);
+      }
+
+      // Second attempt: Low Accuracy with longer timeout
+      const pos = await getPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 0 });
+      await processPosition(pos);
+    } catch (finalErr: any) {
+      console.error("Final geolocation error:", finalErr);
+      toast.error("Não foi possível obter a localização. Verifique se o GPS está ativado e se o navegador tem permissão.");
+      setGettingLocation(false);
+    }
   };
 
-  const filteredSuppliers = suppliers.filter((s) => s.type === originDestType);
+  const handleOperationChange = (type: string) => {
+    setOperationType(type);
+    setOriginType(""); setOriginId("");
+    setDestType(""); setDestId("");
+    
+    // Auto-set constraints based on logic
+    if (type === "entry") {
+      setDestType("internal"); // Entry always goes to Internal
+    } else if (type === "exit") {
+      setOriginType("internal"); // Exit always comes from Internal
+    }
+  };
+
+  const filteredOriginSuppliers = suppliers.filter((s) => s.type === originType);
+  const filteredDestSuppliers = suppliers.filter((s) => s.type === destType);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!operationType) { toast.error("Selecione o tipo de operação"); return; }
     if (!selectedVehicleId) { toast.error("Selecione um veículo"); return; }
-    if (!originDestType || !originDestSupplierId) {
-      toast.error(operationType === "entry" ? "Informe a origem da mercadoria" : "Informe o destino da mercadoria");
-      return;
-    }
+    
+    // Validate Origin/Dest
+    if (!originType || !originId) { toast.error("Informe a origem da mercadoria"); return; }
+    if (!destType || !destId) { toast.error("Informe o destino da mercadoria"); return; }
+
     if (cargos.some((c) => !c.stock_product_id)) { toast.error("Selecione o produto do estoque para todas as cargas"); return; }
     if (!photoFile) { toast.error("A foto da carga é obrigatória"); return; }
 
@@ -172,8 +305,9 @@ const NewRecordPage = () => {
 
     const vehicle = vehicles.find((v) => v.id === selectedVehicleId);
 
-    const brasiliaDate = new Date(form.recordDate + ":00");
-    brasiliaDate.setHours(brasiliaDate.getHours() + 3);
+    // Use device's local timezone - convert datetime-local to ISO string
+    const localDate = new Date(form.recordDate);
+    const recordDateIso = localDate.toISOString();
 
     const { data: record, error: recordError } = await supabase
       .from("material_records")
@@ -181,19 +315,20 @@ const NewRecordPage = () => {
         user_id: user!.id,
         company_id: profile!.company_id,
         operation_type: operationType,
-        record_date: brasiliaDate.toISOString(),
+        record_date: recordDateIso,
         vehicle_plate: vehicle?.plate || "",
         vehicle_brand: vehicle?.brand || null,
         vehicle_model: vehicle?.model || null,
         vehicle_color: vehicle?.color || null,
         vehicle_id: selectedVehicleId,
-        origin_type: operationType === "entry" ? originDestType : null,
-        origin_supplier_id: operationType === "entry" ? originDestSupplierId : null,
-        destination_type: operationType === "exit" ? originDestType : null,
-        destination_supplier_id: operationType === "exit" ? originDestSupplierId : null,
+        origin_type: originType,
+        origin_supplier_id: originId,
+        destination_type: destType,
+        destination_supplier_id: destId,
         notes: form.notes || null,
         latitude: location?.lat || null,
         longitude: location?.lng || null,
+        address: address || null, // Saving captured address text
         photo_url: photoUrl,
       })
       .select()
@@ -216,7 +351,7 @@ const NewRecordPage = () => {
 
   return (
     <AppLayout>
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8">
         <Link to="/records" className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm">
           <ArrowLeft className="w-4 h-4" /> Voltar aos registros
         </Link>
@@ -231,12 +366,12 @@ const NewRecordPage = () => {
               <div className="space-y-2">
                 <Label>Tipo de Operação *</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => { setOperationType("entry"); setOriginDestType(""); setOriginDestSupplierId(""); }}
+                  <button type="button" onClick={() => handleOperationChange("entry")}
                     className={`p-4 rounded-lg border-2 text-center transition-all ${operationType === "entry" ? "border-success bg-success/10 text-success" : "border-border hover:border-muted-foreground"}`}>
                     <div className="text-lg font-semibold">↓ Entrada</div>
                     <div className="text-xs opacity-75">Material chegando</div>
                   </button>
-                  <button type="button" onClick={() => { setOperationType("exit"); setOriginDestType(""); setOriginDestSupplierId(""); }}
+                  <button type="button" onClick={() => handleOperationChange("exit")}
                     className={`p-4 rounded-lg border-2 text-center transition-all ${operationType === "exit" ? "border-warning bg-warning/10 text-warning" : "border-border hover:border-muted-foreground"}`}>
                     <div className="text-lg font-semibold">↑ Saída</div>
                     <div className="text-xs opacity-75">Material saindo</div>
@@ -244,43 +379,164 @@ const NewRecordPage = () => {
                 </div>
               </div>
 
-              {/* Origin / Destination */}
+              {/* Origin / Destination Logic */}
               {operationType && (
-                <div className="space-y-3 p-4 rounded-lg bg-muted/50 border">
-                  <Label className="text-base font-semibold">
-                    {operationType === "entry" ? "De onde está chegando? *" : "Para onde está indo? *"}
-                  </Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => { setOriginDestType("external"); setOriginDestSupplierId(""); }}
-                      className={`p-3 rounded-lg border-2 text-center transition-all text-sm ${originDestType === "external" ? "border-accent bg-accent/10 text-accent" : "border-border hover:border-muted-foreground"}`}>
-                      Externo
-                    </button>
-                    <button type="button" onClick={() => { setOriginDestType("internal"); setOriginDestSupplierId(""); }}
-                      className={`p-3 rounded-lg border-2 text-center transition-all text-sm ${originDestType === "internal" ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-muted-foreground"}`}>
-                      Interno
-                    </button>
-                  </div>
-                  {originDestType && (
-                    <Select value={originDestSupplierId} onValueChange={setOriginDestSupplierId}>
-                      <SelectTrigger><SelectValue placeholder="Selecione o local..." /></SelectTrigger>
-                      <SelectContent>
-                        {filteredSuppliers.length === 0 ? (
-                          <SelectItem value="_none" disabled>Nenhum local cadastrado</SelectItem>
-                        ) : (
-                          filteredSuppliers.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  {/* ORIGIN */}
+                  <div className="flex flex-col h-full space-y-3 p-4 rounded-lg bg-muted/50 border">
+                    <Label className="text-base font-semibold">De onde está vindo? (Origem) *</Label>
+                    
+                    {/* Origin Type Selection */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <button type="button" 
+                        onClick={() => { setOriginType("external"); setOriginId(""); }}
+                        disabled={operationType === "exit"} // Exit always comes from Internal
+                        className={`p-2 rounded-lg border text-center text-sm transition-all ${originType === "external" ? "border-accent bg-accent/10 text-accent font-medium" : "border-border hover:border-muted-foreground"} ${operationType === "exit" ? "opacity-50 cursor-not-allowed bg-muted" : ""}`}>
+                        Externo
+                      </button>
+                      <button type="button" 
+                        onClick={() => { setOriginType("internal"); setOriginId(""); }}
+                        disabled={operationType === "exit"} // Pre-selected for Exit
+                        className={`p-2 rounded-lg border text-center text-sm transition-all ${originType === "internal" ? "border-primary bg-primary/10 text-primary font-medium" : "border-border hover:border-muted-foreground"}`}>
+                        Interno
+                      </button>
+                    </div>
+
+                    {/* Origin Supplier Selection */}
+                    {originType && (
+                      <Select value={originId} onValueChange={setOriginId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione o local..." /></SelectTrigger>
+                        <SelectContent>
+                          {filteredOriginSuppliers.length === 0 ? (
+                            <SelectItem value="_none" disabled>Nenhum local disponível</SelectItem>
+                          ) : (
+                            filteredOriginSuppliers.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {/* GEOLOCATION FOR EXIT (Origin is where I am) */}
+                    {operationType === "exit" && (
+                      <div className="pt-2 border-t mt-auto">
+                         <Label className="text-sm font-semibold mb-2 block mt-2">Confirmar Local de Saída (Sua Localização)</Label>
+                         <Button type="button" variant="outline" onClick={getLocation} disabled={gettingLocation} className="w-full h-auto min-h-[44px] py-3 px-4 flex flex-col items-center gap-2 whitespace-normal bg-background">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <MapPin className="w-4 h-4" />
+                            <span>{gettingLocation ? "Obtendo localização..." : location ? "Atualizar Localização" : "Capturar Localização"}</span>
+                          </div>
+                          {location && (
+                            <span className="text-xs text-muted-foreground font-normal text-center break-words w-full">
+                              {address || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`}
+                            </span>
+                          )}
+                        </Button>
+                        {location && mapboxToken && (
+                          <div className="w-full h-32 rounded-lg overflow-hidden border mt-2 z-0 relative">
+                            <MapContainer 
+                              center={[location.lat, location.lng]} 
+                              zoom={15} 
+                              style={{ width: "100%", height: "100%" }}
+                              scrollWheelZoom={false}
+                            >
+                              <TileLayer
+                                attribution='© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                url={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`}
+                              />
+                              <Marker position={[location.lat, location.lng]}>
+                                <Popup>Local de Saída</Popup>
+                              </Marker>
+                              <MapUpdater center={location} />
+                            </MapContainer>
+                          </div>
                         )}
-                      </SelectContent>
-                    </Select>
-                  )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* DESTINATION */}
+                  <div className="flex flex-col h-full space-y-3 p-4 rounded-lg bg-muted/50 border">
+                    <Label className="text-base font-semibold">Para onde vai? (Destino) *</Label>
+                    
+                    {/* Destination Type Selection */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <button type="button" 
+                        onClick={() => { setDestType("external"); setDestId(""); }}
+                        disabled={operationType === "entry"} // Entry always goes to Internal
+                        className={`p-2 rounded-lg border text-center text-sm transition-all ${destType === "external" ? "border-accent bg-accent/10 text-accent font-medium" : "border-border hover:border-muted-foreground"} ${operationType === "entry" ? "opacity-50 cursor-not-allowed bg-muted" : ""}`}>
+                        Externo
+                      </button>
+                      <button type="button" 
+                        onClick={() => { setDestType("internal"); setDestId(""); }}
+                        disabled={operationType === "entry"} // Pre-selected for Entry
+                        className={`p-2 rounded-lg border text-center text-sm transition-all ${destType === "internal" ? "border-primary bg-primary/10 text-primary font-medium" : "border-border hover:border-muted-foreground"}`}>
+                        Interno
+                      </button>
+                    </div>
+
+                    {/* Destination Supplier Selection */}
+                    {destType && (
+                      <Select value={destId} onValueChange={setDestId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione o local..." /></SelectTrigger>
+                        <SelectContent>
+                          {filteredDestSuppliers.length === 0 ? (
+                            <SelectItem value="_none" disabled>Nenhum local disponível</SelectItem>
+                          ) : (
+                            filteredDestSuppliers.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {/* GEOLOCATION FOR ENTRY (Destination is where I am) */}
+                    {operationType === "entry" && (
+                      <div className="pt-2 border-t mt-auto">
+                         <Label className="text-sm font-semibold mb-2 block mt-2">Confirmar Local de Entrada (Sua Localização)</Label>
+                         <Button type="button" variant="outline" onClick={getLocation} disabled={gettingLocation} className="w-full h-auto min-h-[44px] py-3 px-4 flex flex-col items-center gap-2 whitespace-normal bg-background">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <MapPin className="w-4 h-4" />
+                            <span>{gettingLocation ? "Obtendo localização..." : location ? "Atualizar Localização" : "Capturar Localização"}</span>
+                          </div>
+                          {location && (
+                            <span className="text-xs text-muted-foreground font-normal text-center break-words w-full">
+                              {address || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`}
+                            </span>
+                          )}
+                        </Button>
+                        {location && mapboxToken && (
+                          <div className="w-full h-32 rounded-lg overflow-hidden border mt-2 z-0 relative">
+                            <MapContainer 
+                              center={[location.lat, location.lng]} 
+                              zoom={15} 
+                              style={{ width: "100%", height: "100%" }}
+                              scrollWheelZoom={false}
+                            >
+                              <TileLayer
+                                attribution='© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                url={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`}
+                              />
+                              <Marker position={[location.lat, location.lng]}>
+                                <Popup>Local de Entrada</Popup>
+                              </Marker>
+                              <MapUpdater center={location} />
+                            </MapContainer>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* Date (Brasília) */}
+              {/* Date (Device Local Time) */}
               <div className="space-y-2">
-                <Label>Data e Hora (Horário de Brasília) *</Label>
-                <Input type="datetime-local" value={form.recordDate} onChange={(e) => setForm({ ...form, recordDate: e.target.value })} required />
+                <Label>Data e Hora (Horário local do dispositivo)</Label>
+                <Input type="datetime-local" value={form.recordDate} readOnly className="bg-muted cursor-not-allowed" required />
+                <p className="text-xs text-muted-foreground">Horário capturado automaticamente do dispositivo</p>
               </div>
 
               {/* Vehicle Selection */}
@@ -382,17 +638,7 @@ const NewRecordPage = () => {
                 ))}
               </div>
 
-              {/* Geolocation with Mapbox */}
-              <div className="space-y-2">
-                <Label className="text-base font-semibold">Geolocalização</Label>
-                <Button type="button" variant="outline" onClick={getLocation} disabled={gettingLocation} className="w-full">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  {gettingLocation ? "Obtendo..." : location ? `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : "Capturar Localização"}
-                </Button>
-                {mapboxToken && (
-                  <div ref={mapContainerRef} className="w-full h-48 sm:h-64 rounded-lg overflow-hidden border mt-2" />
-                )}
-              </div>
+              {/* Geolocation moved to Origin/Destination sections */}
 
               {/* Notes */}
               <div className="space-y-2">

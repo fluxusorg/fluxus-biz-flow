@@ -97,7 +97,7 @@ const RegisterPage = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-6xl">
         <div className="mb-6">
           <Link to="/auth" className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm">
             <ArrowLeft className="w-4 h-4" /> Voltar ao login

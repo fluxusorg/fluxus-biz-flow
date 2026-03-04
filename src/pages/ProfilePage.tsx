@@ -96,7 +96,7 @@ const ProfilePage = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div>
           <h1 className="text-3xl font-bold font-display">Meu Perfil</h1>
           <p className="text-muted-foreground mt-1">

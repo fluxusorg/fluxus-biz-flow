@@ -223,10 +223,10 @@ const RecordsPage = () => {
                     <div className="text-right shrink-0">
                       <p className="text-sm flex items-center gap-1 text-muted-foreground justify-end">
                         <Calendar className="w-3 h-3" />
-                        {new Date(r.record_date).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                        {new Date(r.record_date).toLocaleDateString("pt-BR")}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(r.record_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                        {new Date(r.record_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                   </div>
@@ -248,7 +248,7 @@ const RecordsPage = () => {
                     {selectedRecord.operation_type === "entry" ? "Entrada" : "Saída"}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
-                    {new Date(selectedRecord.record_date).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                    {new Date(selectedRecord.record_date).toLocaleString("pt-BR")}
                   </span>
                 </div>
 

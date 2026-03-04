@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard, Package, ChevronLeft, ChevronRight, Truck, MapPin, UserCircle } from "lucide-react";
+import { LogOut, Menu, X, Building2, Users, FileText, LayoutDashboard, Package, ChevronLeft, ChevronRight, Truck, MapPin, UserCircle, FileBarChart } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import Logo from "@/components/Logo";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +23,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         { label: "Painel", icon: LayoutDashboard, path: "/dashboard" },
         { label: "Funcionários", icon: Users, path: "/employees" },
         { label: "Registros", icon: FileText, path: "/records" },
+        { label: "Relatórios", icon: FileBarChart, path: "/reports" },
         { label: "Estoque", icon: Package, path: "/stock" },
         { label: "Veículos", icon: Truck, path: "/vehicles" },
         { label: "Fornecedores", icon: MapPin, path: "/suppliers" },
@@ -32,6 +33,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     : [
         { label: "Painel", icon: LayoutDashboard, path: "/dashboard" },
         { label: "Registros", icon: FileText, path: "/records" },
+        { label: "Relatórios", icon: FileBarChart, path: "/reports" },
         { label: "Meu Perfil", icon: UserCircle, path: "/profile" },
       ];
 
@@ -48,9 +50,9 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   }, [isMaster, location.pathname]);
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="fixed inset-0 flex bg-background overflow-hidden">
       {/* Sidebar - Desktop */}
-      <aside className={`hidden md:flex flex-col gradient-hero text-primary-foreground transition-all duration-300 ${collapsed ? "w-[72px]" : "w-64"}`}>
+      <aside className={`hidden md:flex flex-col gradient-hero text-primary-foreground transition-all duration-300 shrink-0 ${collapsed ? "w-[72px]" : "w-64"}`}>
         <div className={`p-4 border-b border-white/10 flex items-center h-16 ${collapsed ? "justify-center" : "gap-2"}`}>
           <Logo size="sm" variant="white" showText={!collapsed} />
         </div>
