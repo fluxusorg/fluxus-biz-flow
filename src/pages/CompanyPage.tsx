@@ -7,9 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Building2, Hash, Pencil, Camera, MapPin, User } from "lucide-react";
+import { Building2, FileText, Pencil, Camera, MapPin, User } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+
+// Helper function to format CNPJ
+const formatCNPJ = (cnpj: string): string => {
+  if (!cnpj) return "";
+  const digits = cnpj.replace(/\D/g, "");
+  if (digits.length !== 14) return cnpj;
+  return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+};
 
 const CompanyPage = () => {
   const { company } = useAuth();
@@ -128,7 +136,7 @@ const CompanyPage = () => {
               <div>
                 <h2 className="text-xl font-bold font-display">{company.name}</h2>
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Hash className="w-3 h-3" /> {company.cnpj}
+                  <FileText className="w-3 h-3" /> CNPJ: {formatCNPJ(company.cnpj)}
                 </p>
               </div>
             </div>
